@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "334046732760",
+    "project_id": "duwa-5e1a6",
+    "storage_bucket": "duwa-5e1a6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:334046732760:android:35e16b547c196f853c52ad",
+        "android_client_info": {
+          "package_name": "com.example.duwa"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "334046732760-m378ogsgeqa8j2202hgrpv4a3q5bv388.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8Mj8XKffWG-j9i7Rk5PzcZdDKiHfCMhw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "334046732760-m378ogsgeqa8j2202hgrpv4a3q5bv388.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
