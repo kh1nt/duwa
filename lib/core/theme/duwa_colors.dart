@@ -69,8 +69,8 @@ class DuwaColors {
   static const Color presenceAway = Color(0xFF94A3B8);    // Idle / AFK
   
   static const Color obsidianTextPrimary = Color(0xFFF8FAFC);
-  static const Color obsidianTextSecondary = Color(0xFF94A3B8);
-  static const Color obsidianTextMuted = Color(0xFF64748B);
+  static const Color obsidianTextSecondary = Color(0xFFCBD5E1); // Elevated luminous stone-slate
+  static const Color obsidianTextMuted = Color(0xFF94A3B8);     // High contrast secondary slate
 
   // ==========================================
   // --- THEME: CLEAN LIGHT (BLACK TEXT) ---

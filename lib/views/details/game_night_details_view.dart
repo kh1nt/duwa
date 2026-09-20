@@ -8,6 +8,9 @@ import '../../models/group_model.dart';
 import '../../viewmodels/game_night_viewmodel.dart';
 import '../common/bouncy_tap.dart';
 import '../common/preparation_widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'calendar_export_sheet.dart';
+import 'edit_game_night_sheet.dart';
 import 'game_night_dispatch_sheet.dart';
 
 class GameNightDetailsView extends StatefulWidget {
@@ -34,8 +37,15 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
 
   RSVPStatus? _myRsvp(GameNightModel s) {
     final myId = widget.gameNightVm.currentUserProfile?.id;
+    final myName = widget.gameNightVm.currentUserProfile?.displayName;
     for (final p in s.players) {
-      if (p.id == myId || p.id == 'p1' || p.name == 'You' || p.name.contains('(You)')) {
+      if (myId != null && myId != 'user-default' && p.id == myId) {
+        return p.rsvp;
+      }
+      if (myName != null && myName != 'Player' && p.name == myName) {
+        return p.rsvp;
+      }
+      if ((myId == null || myId == 'user-default') && (p.id == 'p1' || p.name == 'You' || p.name.contains('(You)'))) {
         return p.rsvp;
       }
     }
@@ -43,10 +53,19 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
   }
 
   bool _isHost(GameNightModel s) {
-    return s.isHost ||
-        s.organizerName == 'You' ||
-        (widget.gameNightVm.currentUserProfile != null &&
-            s.organizerName == widget.gameNightVm.currentUserProfile!.displayName);
+    final myId = widget.gameNightVm.currentUserProfile?.id;
+    final myName = widget.gameNightVm.currentUserProfile?.displayName;
+    if (s.createdBy != null && myId != null && myId != 'user-default') {
+      return s.createdBy == myId;
+    }
+    if (s.isHost) return true;
+    if (myName != null && myName != 'Player' && s.organizerName == myName) {
+      return true;
+    }
+    if ((myId == null || myId == 'user-default') && s.organizerName == 'You') {
+      return true;
+    }
+    return false;
   }
 
   void _openDispatchSheet(GameNightModel session, DuwaThemeData theme) {
@@ -57,10 +76,216 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
     );
   }
 
+  void _openCalendarSheet(GameNightModel session, DuwaThemeData theme) {
+    CalendarExportSheet.show(
+      context,
+      gameNight: session,
+      duwaTheme: theme,
+    );
+  }
+
   void _copyInviteCode(GameNightModel session) {
     Clipboard.setData(ClipboardData(text: session.displayRoomCode));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Invite code ${session.displayRoomCode} copied! 🎮')),
+    );
+  }
+
+  Future<void> _openVoiceChannel(GameNightModel session, DuwaThemeData theme) async {
+    final rawUrl = session.voiceChannelUrl?.trim();
+    if (rawUrl != null && rawUrl.isNotEmpty) {
+      final uri = Uri.tryParse(rawUrl);
+      if (uri != null) {
+        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (launched) return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open voice link: $rawUrl')),
+      );
+      return;
+    }
+
+    // Voice link not configured yet
+    if (_isHost(session)) {
+      _promptAddVoiceChannel(session, theme);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No voice room linked yet. Ask your host to add one! 🎙️'),
+        ),
+      );
+    }
+  }
+
+  void _promptAddVoiceChannel(GameNightModel session, DuwaThemeData theme) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        backgroundColor: theme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Connect Voice Channel',
+          style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.w800),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Paste your Discord voice channel, Google Meet, or party chat link:',
+              style: TextStyle(color: theme.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: TextStyle(color: theme.textPrimary, fontSize: 13.5),
+              decoration: InputDecoration(
+                hintText: 'https://discord.gg/...',
+                hintStyle: TextStyle(color: theme.textMuted),
+                filled: true,
+                fillColor: theme.surfaceHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: theme.cardBorder),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dlgCtx),
+            child: Text('Cancel', style: TextStyle(color: theme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.primaryAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              final url = controller.text.trim();
+              if (url.isNotEmpty) {
+                widget.gameNightVm.updateSessionDetails(
+                  session.id,
+                  voiceChannelUrl: url,
+                );
+              }
+              Navigator.pop(dlgCtx);
+              if (url.isNotEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Voice channel linked! 🎙️')),
+                );
+              }
+            },
+            child: const Text('Save Link'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddBringItemDialog(GameNightModel session, DuwaThemeData theme) {
+    final controller = TextEditingController();
+    bool claimForMe = true;
+
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          backgroundColor: theme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'Add Bring-List Item',
+            style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.w800),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Snack, beverage, extra controller, or HDMI cable:',
+                style: TextStyle(color: theme.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                style: TextStyle(color: theme.textPrimary, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'e.g. 2 Large Bags of Doritos',
+                  hintStyle: TextStyle(color: theme.textMuted),
+                  filled: true,
+                  fillColor: theme.surfaceHighest,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: theme.cardBorder),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Checkbox(
+                    value: claimForMe,
+                    activeColor: theme.primaryAccent,
+                    onChanged: (val) => setDlgState(() => claimForMe = val ?? true),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setDlgState(() => claimForMe = !claimForMe),
+                      child: Text(
+                        "I'll bring this item myself",
+                        style: TextStyle(
+                          color: theme.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dlgCtx),
+              child: Text('Cancel', style: TextStyle(color: theme.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.primaryAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                final text = controller.text.trim();
+                if (text.isEmpty) return;
+
+                final myName = widget.gameNightVm.currentUserProfile?.displayName ?? 'You';
+                final newItem = ChecklistItemModel(
+                  id: 'item-${DateTime.now().millisecondsSinceEpoch}',
+                  title: text,
+                  isDone: false,
+                  assignedTo: claimForMe ? myName : null,
+                );
+
+                widget.gameNightVm.addChecklistItem(session.id, newItem);
+                Navigator.pop(dlgCtx);
+                HapticFeedback.lightImpact();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Added "$text" to squad bring list! 🍕')),
+                );
+              },
+              child: const Text('Add Item'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -107,6 +332,8 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
   void _handleMenuSelection(String value, GameNightModel session, DuwaThemeData t) {
     if (value == 'dispatch') {
       _openDispatchSheet(session, t);
+    } else if (value == 'calendar') {
+      _openCalendarSheet(session, t);
     } else if (value == 'copy') {
       _copyInviteCode(session);
     } else if (value == 'lock') {
@@ -129,6 +356,13 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Session cancelled.')),
       );
+    } else if (value == 'edit') {
+      EditGameNightSheet.show(
+        context,
+        session: session,
+        gameNightVm: widget.gameNightVm,
+        duwaTheme: t,
+      );
     } else if (value == 'delete') {
       _confirmDeleteSession(context, session);
     }
@@ -136,6 +370,17 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
 
   List<PopupMenuEntry<String>> _buildMenuItems(GameNightModel session, DuwaThemeData t) {
     return [
+      if (_isHost(session) && session.status != GameNightStatus.completed && session.status != GameNightStatus.cancelled)
+        const PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.tune_rounded, size: 18),
+              SizedBox(width: 8),
+              Text('Edit Session'),
+            ],
+          ),
+        ),
       const PopupMenuItem(
         value: 'dispatch',
         child: Row(
@@ -143,6 +388,16 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
             Icon(Icons.send_rounded, size: 18),
             SizedBox(width: 8),
             Text('Share Dispatch'),
+          ],
+        ),
+      ),
+      const PopupMenuItem(
+        value: 'calendar',
+        child: Row(
+          children: [
+            Icon(Icons.edit_calendar_rounded, size: 18),
+            SizedBox(width: 8),
+            Text('Add to Calendar'),
           ],
         ),
       ),
@@ -350,11 +605,9 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
         _buildCozyHostNoteCard(s, t),
         const SizedBox(height: 14),
 
-        // 6. Preparation checklist if items exist
-        if (s.checklist.isNotEmpty) ...[
-          _buildCozyChecklistCard(s, t),
-          const SizedBox(height: 14),
-        ],
+        // 6. Preparation checklist
+        _buildCozyChecklistCard(s, t),
+        const SizedBox(height: 14),
       ],
     );
   }
@@ -363,7 +616,6 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
     final isVoting = s.status == GameNightStatus.voting;
     final displayTitle = s.selectedGame?.title ?? (isVoting ? 'Squad Vote in Progress' : s.title);
     final coverUrl = s.selectedGame?.displayCoverUrl;
-    final totalSlots = s.maxPlayers;
     final squadCount = s.goingCount;
 
     return Container(
@@ -484,7 +736,7 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
-                                '$squadCount / $totalSlots Squad',
+                                '$squadCount ${squadCount == 1 ? "Player" : "Players"} In',
                                 style: TextStyle(
                                   color: t.primaryAccent,
                                   fontSize: 10.5,
@@ -658,6 +910,33 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
                   letterSpacing: -0.2,
                 ),
               ),
+              const Spacer(),
+              BouncyTap(
+                onTap: () => _openCalendarSheet(s, t),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: t.primaryAccent.withAlpha(25),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: t.primaryAccent.withAlpha(80)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_calendar_rounded, size: 13, color: t.primaryAccent),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Add to Calendar',
+                        style: TextStyle(
+                          color: t.primaryAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -806,7 +1085,7 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '${s.goingCount} / $totalSlots',
+                  '${s.goingCount} confirmed',
                   style: TextStyle(
                     color: t.primaryAccent,
                     fontSize: 11,
@@ -816,7 +1095,7 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
               ),
               const Spacer(),
               Text(
-                openSlots > 0 ? '$openSlots Slot${openSlots == 1 ? '' : 's'} Open' : 'Squad Full',
+                openSlots > 0 ? '$openSlots Open Slot${openSlots == 1 ? '' : 's'}' : 'Full Lobby',
                 style: TextStyle(
                   color: t.textMuted,
                   fontSize: 11,
@@ -977,23 +1256,37 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
               const SizedBox(width: 10),
               Expanded(
                 child: BouncyTap(
-                  onTap: () => _openDispatchSheet(s, t),
+                  onTap: () => _openVoiceChannel(s, t),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: t.surfaceHighest,
+                      color: s.hasVoiceChannel
+                          ? t.primaryAccent.withAlpha(30)
+                          : t.surfaceHighest,
                       borderRadius: BorderRadius.circular(999),
+                      border: s.hasVoiceChannel
+                          ? Border.all(
+                              color: t.primaryAccent.withAlpha(120),
+                              width: 1,
+                            )
+                          : null,
                     ),
                     alignment: Alignment.center,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline_rounded, size: 16, color: t.textPrimary),
+                        Icon(
+                          s.hasVoiceChannel
+                              ? Icons.headset_mic_rounded
+                              : Icons.headset_mic_outlined,
+                          size: 16,
+                          color: s.hasVoiceChannel ? t.primaryAccent : t.textPrimary,
+                        ),
                         const SizedBox(width: 6),
                         Text(
-                          'Chat / Voice',
+                          s.hasVoiceChannel ? 'Join Voice' : 'Chat / Voice',
                           style: TextStyle(
-                            color: t.textPrimary,
+                            color: s.hasVoiceChannel ? t.primaryAccent : t.textPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1197,6 +1490,34 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
                   letterSpacing: -0.2,
                 ),
               ),
+              const Spacer(),
+              if (s.status != GameNightStatus.completed &&
+                  s.status != GameNightStatus.cancelled)
+                BouncyTap(
+                  onTap: () => _showAddBringItemDialog(s, t),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: t.primaryAccent.withAlpha(25),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_rounded, size: 14, color: t.primaryAccent),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Add item',
+                          style: TextStyle(
+                            color: t.primaryAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1214,6 +1535,7 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
   Widget _buildCozyBottomActionBar(GameNightModel s, DuwaThemeData t) {
     final myRsvp = _myRsvp(s);
     final isGoing = myRsvp == RSVPStatus.going;
+    final isHost = _isHost(s);
 
     return Container(
       decoration: BoxDecoration(
@@ -1223,11 +1545,22 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
       child: Row(
         children: [
-          // Edit Details Button
+          // Edit Details Button (Host) or Share Brief (Attendee)
           Expanded(
             flex: 1,
             child: BouncyTap(
-              onTap: () => _openDispatchSheet(s, t),
+              onTap: () {
+                if (isHost) {
+                  EditGameNightSheet.show(
+                    context,
+                    session: s,
+                    gameNightVm: widget.gameNightVm,
+                    duwaTheme: t,
+                  );
+                } else {
+                  _openDispatchSheet(s, t);
+                }
+              },
               child: Container(
                 height: 48,
                 decoration: BoxDecoration(
@@ -1238,10 +1571,14 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.tune_rounded, size: 17, color: t.textPrimary),
+                    Icon(
+                      isHost ? Icons.tune_rounded : Icons.share_rounded,
+                      size: 17,
+                      color: t.textPrimary,
+                    ),
                     const SizedBox(width: 6),
                     Text(
-                      'Edit Details',
+                      isHost ? 'Edit Details' : 'Share Brief',
                       style: TextStyle(
                         color: t.textPrimary,
                         fontSize: 13,

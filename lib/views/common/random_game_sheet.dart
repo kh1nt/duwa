@@ -13,12 +13,14 @@ class RandomGameSheet extends StatefulWidget {
   final List<GameModel> games;
   final DuwaThemeData duwaTheme;
   final ValueChanged<GameModel> onPlanGame;
+  final VoidCallback? onAddGame;
 
   const RandomGameSheet({
     super.key,
     required this.games,
     required this.duwaTheme,
     required this.onPlanGame,
+    this.onAddGame,
   });
 
   static void show(
@@ -26,6 +28,7 @@ class RandomGameSheet extends StatefulWidget {
     required List<GameModel> games,
     required DuwaThemeData duwaTheme,
     required ValueChanged<GameModel> onPlanGame,
+    VoidCallback? onAddGame,
   }) {
     showModalBottomSheet(
       context: context,
@@ -38,6 +41,7 @@ class RandomGameSheet extends StatefulWidget {
         games: games,
         duwaTheme: duwaTheme,
         onPlanGame: onPlanGame,
+        onAddGame: onAddGame,
       ),
     );
   }
@@ -198,6 +202,12 @@ class _RandomGameSheetState extends State<RandomGameSheet>
                     ],
                   ),
                 ),
+                if (widget.onAddGame != null)
+                  IconButton(
+                    icon: Icon(Icons.add_circle_outline_rounded, color: t.primaryAccent),
+                    tooltip: 'Add Game to Library',
+                    onPressed: widget.onAddGame,
+                  ),
               ],
             ),
             const SizedBox(height: 18),

@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocCreator() {
+      return isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    function isCreatingAsSelf() {
+      return isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+    }
+
+    function ownershipUnchanged() {
+      return !('createdBy' in request.resource.data) || 
+             request.resource.data.createdBy == resource.data.createdBy;
+    }
+
+    // --- User Profiles ---
+    match /users/{userId} {
+      // Authenticated users can read player profiles (needed for squad member lookups)
+      allow read: if isAuthenticated();
+      // Only the profile owner can create, modify, or delete their profile
+      allow create, update, delete: if isOwner(userId);
+    }
+
+    // --- Gaming Squads / Groups ---
+    match /groups/{groupId} {
+      // Single doc lookup (e.g. joining by squad code or ID)
+      allow get: if isAuthenticated();
+      // Collection queries: strictly scoped to squads the user created or is a member of
+      allow list: if isAuthenticated() && (
+        isDocCreator() ||
+        (('memberUids' in resource.data) && request.auth.uid in resource.data.memberUids)
+      );
+
+      // Only authenticated users setting themselves as creator can create squads
+      allow create: if isCreatingAsSelf();
+      // Members or creator can update squad details, but cannot reassign creator
+      allow update: if isAuthenticated() && ownershipUnchanged();
+      // ONLY the creator can delete their squad
+      allow delete: if isDocCreator();
+    }
+
+    // --- Game Nights & Sessions ---
+    match /game_nights/{sessionId} {
+      // Single doc lookup (e.g. joining by 6-char room code)
+      allow get: if isAuthenticated();
+      // Collection queries: strictly scoped to sessions the user created or is attending
+      allow list: if isAuthenticated() && (
+        isDocCreator() ||
+        (('playerUids' in resource.data) && request.auth.uid in resource.data.playerUids)
+      );
+
+      // Creator must match the authenticated user UID
+      allow create: if isCreatingAsSelf();
+      // Attendees can RSVP, vote, add checklist items, and hosts can edit details.
+      // Ownership (createdBy) and room code cannot be tampered with.
+      allow update: if isAuthenticated() && 
+                    ownershipUnchanged() && 
+                    (!('roomCode' in request.resource.data) || request.resource.data.roomCode == resource.data.roomCode);
+      // ONLY the organizer/creator can delete or cancel a session
+      allow delete: if isDocCreator();
+    }
+
+    // --- Games Catalog ---
+    match /games/{gameId} {
+      // Catalog is readable by all authenticated players
+      allow read: if isAuthenticated();
+      // Custom games can be submitted by authenticated users
+      allow create: if isAuthenticated();
+      // Curated/system games (no createdBy) cannot be modified or deleted by regular users.
+      // Custom games can only be modified or deleted by their author.
+      allow update: if isAuthenticated() && (
+        !('createdBy' in resource.data) || resource.data.createdBy == request.auth.uid
+      );
+      allow delete: if isAuthenticated() && (
+        'createdBy' in resource.data && resource.data.createdBy == request.auth.uid
+      );
+    }
+  }
+}

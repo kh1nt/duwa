@@ -11,7 +11,7 @@ class CloudinaryService {
   CloudinaryService._internal();
 
   /// Cloudinary cloud name (can be configured by caller or environment)
-  String cloudName = 'duwa';
+  String cloudName = 'dz4x2mmzc';
 
   /// Cloudinary unsigned upload preset (configured in Cloudinary Console -> Settings -> Upload)
   String uploadPreset = 'duwa_preset';

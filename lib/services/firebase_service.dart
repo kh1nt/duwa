@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/game_model.dart';
+import 'preferences_service.dart';
 
 /// Clean, modular Firebase Service for DUWA.
 /// Handles instant guest sign-in, email/password registration,
@@ -164,6 +165,9 @@ class FirebaseService {
 
   /// Sign out
   Future<void> signOut() async {
+    try {
+      await PreferencesService().clearUserSessionData();
+    } catch (_) {}
     await _auth.signOut();
   }
 
@@ -259,6 +263,7 @@ class FirebaseService {
     List<String>? drinks,
     List<Map<String, dynamic>>? checklist,
     String? organizerName,
+    String? uid,
   }) async {
     try {
       final code = roomCode ?? generateRoomCode();
@@ -266,6 +271,23 @@ class FirebaseService {
           id != null && id.isNotEmpty
               ? _gameNightsCol.doc(id)
               : _gameNightsCol.doc();
+      final creatorUid = uid ?? currentUser?.uid;
+      final playerUids = <String>[];
+      if (creatorUid != null && creatorUid.isNotEmpty && creatorUid != 'guest') {
+        playerUids.add(creatorUid);
+      }
+      final playersList = <Map<String, dynamic>>[];
+      for (int i = 0; i < playerNames.length; i++) {
+        final name = playerNames[i];
+        final cleanName = name.replaceAll(' (You)', '').replaceAll('(You)', '').trim();
+        final isCreator = i == 0 || (creatorUid != null && name.contains('(You)'));
+        playersList.add({
+          'id': isCreator && creatorUid != null ? creatorUid : 'p-${name.hashCode}',
+          'name': cleanName.isNotEmpty ? cleanName : 'Player',
+          'rsvp': 'going',
+        });
+      }
+
       await docRef.set({
         'title': title,
         'roomCode': code,
@@ -276,14 +298,14 @@ class FirebaseService {
         'status': status ?? (nominatedGames.length > 1 ? 'voting' : 'ready'),
         'nominatedGames': nominatedGames,
         'selectedGame': selectedGame,
-        'players':
-            playerNames.map((name) => {'name': name, 'rsvp': 'going'}).toList(),
+        'players': playersList,
+        'playerUids': playerUids,
         'location': location,
         'food': food,
         'drinks': drinks ?? [],
         'checklist': checklist ?? [],
-        'organizerName': organizerName ?? (currentUser?.displayName ?? 'You'),
-        'createdBy': currentUser?.uid ?? 'guest',
+        'organizerName': organizerName ?? (currentUser?.displayName ?? 'Host'),
+        'createdBy': creatorUid ?? 'guest',
         'createdAt': FieldValue.serverTimestamp(),
       });
       return docRef.id;
@@ -328,6 +350,56 @@ class FirebaseService {
     }
   }
 
+  /// Update editable details of a game night session in Firestore
+  Future<bool> updateSessionDetails({
+    required String gameNightId,
+    String? title,
+    String? description,
+    DateTime? date,
+    String? time,
+    String? voiceChannelUrl,
+    String? locationName,
+  }) async {
+    try {
+      final updates = <String, dynamic>{
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (title != null) updates['title'] = title;
+      if (description != null) {
+        updates['description'] = description;
+        updates['subdetail'] = description;
+      }
+      if (date != null) updates['date'] = Timestamp.fromDate(date);
+      if (time != null) updates['time'] = time;
+      if (voiceChannelUrl != null) updates['voiceChannelUrl'] = voiceChannelUrl;
+      if (locationName != null) {
+        updates['location'] = {'name': locationName, 'isConfirmed': true};
+      }
+      await _gameNightsCol.doc(gameNightId).update(updates);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating session details on Firebase: $e');
+      return false;
+    }
+  }
+
+  /// Append a new bring-list item to an active session
+  Future<bool> addChecklistItemToSession({
+    required String gameNightId,
+    required Map<String, dynamic> item,
+  }) async {
+    try {
+      await _gameNightsCol.doc(gameNightId).update({
+        'checklist': FieldValue.arrayUnion([item]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error adding checklist item to Firebase: $e');
+      return false;
+    }
+  }
+
   /// Delete a game night session from Firestore
   Future<bool> deleteGameNight(String gameNightId) async {
     try {
@@ -343,6 +415,7 @@ class FirebaseService {
   Future<Map<String, dynamic>?> joinGameNightByCode({
     required String roomCode,
     required String playerName,
+    String? uid,
   }) async {
     try {
       final formattedCode = roomCode.toUpperCase().trim();
@@ -356,11 +429,30 @@ class FirebaseService {
 
       final doc = query.docs.first;
       final data = doc.data();
+      final currentUid = uid ?? currentUser?.uid;
+      final cleanName = playerName.replaceAll(' (You)', '').replaceAll('(You)', '').trim();
       final players = List<Map<String, dynamic>>.from(data['players'] ?? []);
-      final alreadyJoined = players.any((p) => p['name'] == playerName);
+      final alreadyJoined = players.any(
+        (p) => (currentUid != null && currentUid.isNotEmpty && p['id'] == currentUid) || p['name'] == cleanName,
+      );
+      final updates = <String, dynamic>{};
       if (!alreadyJoined) {
-        players.add({'name': playerName, 'rsvp': 'going'});
-        await doc.reference.update({'players': players});
+        players.add({
+          'id': currentUid ?? 'p-${DateTime.now().millisecondsSinceEpoch}',
+          'name': cleanName.isNotEmpty ? cleanName : 'Player',
+          'rsvp': 'going',
+        });
+        updates['players'] = players;
+      }
+      if (currentUid != null && currentUid.isNotEmpty && currentUid != 'guest') {
+        final existingUids = List<String>.from(data['playerUids'] ?? []);
+        if (!existingUids.contains(currentUid)) {
+          updates['playerUids'] = FieldValue.arrayUnion([currentUid]);
+        }
+      }
+      if (updates.isNotEmpty) {
+        updates['updatedAt'] = FieldValue.serverTimestamp();
+        await doc.reference.update(updates);
       }
       return {'id': doc.id, ...data, 'players': players};
     } catch (e) {
@@ -369,52 +461,92 @@ class FirebaseService {
     }
   }
 
-  /// Stream real-time game nights from Firestore
-  Stream<QuerySnapshot<Map<String, dynamic>>> streamGameNights() {
-    return _gameNightsCol.orderBy('createdAt', descending: true).snapshots();
+  /// Stream real-time game nights from Firestore for the given user.
+  /// Scopes queries to documents containing the user's UID in [playerUids].
+  Stream<QuerySnapshot<Map<String, dynamic>>> streamGameNights({String? uid}) {
+    final targetUid = uid ?? currentUser?.uid;
+    if (targetUid == null || targetUid == 'user-default' || targetUid.isEmpty) {
+      return const Stream.empty();
+    }
+    return _gameNightsCol
+        .where('playerUids', arrayContains: targetUid)
+        .snapshots();
   }
 
-  /// Cast a vote in real-time
-  Future<void> castVote({
+  /// Cast a vote in real-time using atomic Firestore transaction
+  /// to eliminate race conditions when squad members vote simultaneously.
+  Future<bool> castVote({
     required String gameNightId,
     required int gameIndex,
   }) async {
     try {
-      final doc = await _gameNightsCol.doc(gameNightId).get();
-      if (!doc.exists) return;
+      final docRef = _gameNightsCol.doc(gameNightId);
+      return await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (!snapshot.exists || snapshot.data() == null) return false;
 
-      final data = doc.data()!;
-      final games = List<Map<String, dynamic>>.from(
-        data['nominatedGames'] ?? [],
-      );
-      if (gameIndex >= 0 && gameIndex < games.length) {
-        games[gameIndex]['votes'] = (games[gameIndex]['votes'] ?? 0) + 1;
-        await _gameNightsCol.doc(gameNightId).update({'nominatedGames': games});
-      }
+        final data = snapshot.data()!;
+        final games = List<Map<String, dynamic>>.from(
+          data['nominatedGames'] ?? [],
+        );
+        if (gameIndex >= 0 && gameIndex < games.length) {
+          games[gameIndex] = Map<String, dynamic>.from(games[gameIndex]);
+          games[gameIndex]['votes'] = (games[gameIndex]['votes'] ?? 0) + 1;
+          transaction.update(docRef, {
+            'nominatedGames': games,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          return true;
+        }
+        return false;
+      });
     } catch (e) {
-      debugPrint('Error casting vote on Firebase: $e');
+      debugPrint('Firestore castVote transaction note: $e');
+      return false;
     }
   }
 
-  /// Update player RSVP status in Firebase
-  Future<void> updatePlayerRsvp({
+  /// Update player RSVP status in Firebase using atomic Firestore transaction
+  /// to prevent concurrent RSVP updates from clobbering other players' status.
+  Future<bool> updatePlayerRsvp({
     required String gameNightId,
     required String playerName,
     required String rsvp,
+    String? uid,
   }) async {
     try {
-      final doc = await _gameNightsCol.doc(gameNightId).get();
-      if (!doc.exists) return;
+      final docRef = _gameNightsCol.doc(gameNightId);
+      return await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (!snapshot.exists || snapshot.data() == null) return false;
 
-      final data = doc.data()!;
-      final players = List<Map<String, dynamic>>.from(data['players'] ?? []);
-      final index = players.indexWhere((p) => p['name'] == playerName);
-      if (index != -1) {
-        players[index]['rsvp'] = rsvp;
-        await _gameNightsCol.doc(gameNightId).update({'players': players});
-      }
+        final data = snapshot.data()!;
+        final players = List<Map<String, dynamic>>.from(data['players'] ?? []);
+        final index = players.indexWhere((p) =>
+            (uid != null && uid.isNotEmpty && p['id'] == uid) ||
+            p['name'] == playerName);
+        if (index != -1) {
+          players[index] = Map<String, dynamic>.from(players[index]);
+          if (uid != null && uid.isNotEmpty) {
+            players[index]['id'] = uid;
+          }
+          players[index]['rsvp'] = rsvp;
+        } else {
+          players.add({
+            if (uid != null && uid.isNotEmpty) 'id': uid,
+            'name': playerName,
+            'rsvp': rsvp,
+          });
+        }
+        transaction.update(docRef, {
+          'players': players,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
     } catch (e) {
-      debugPrint('Error updating player rsvp status: $e');
+      debugPrint('Firestore updatePlayerRsvp transaction note: $e');
+      return false;
     }
   }
 
@@ -422,9 +554,16 @@ class FirebaseService {
   // --- SQUADS / GROUPS (Cloud Firestore) ---
   // ==========================================
 
-  /// Stream squads from Firestore
-  Stream<QuerySnapshot<Map<String, dynamic>>> streamGroups() {
-    return _groupsCol.snapshots();
+  /// Stream squads from Firestore for the given user.
+  /// Scopes queries to documents containing the user's UID in [memberUids].
+  Stream<QuerySnapshot<Map<String, dynamic>>> streamGroups({String? uid}) {
+    final targetUid = uid ?? currentUser?.uid;
+    if (targetUid == null || targetUid == 'user-default' || targetUid.isEmpty) {
+      return const Stream.empty();
+    }
+    return _groupsCol
+        .where('memberUids', arrayContains: targetUid)
+        .snapshots();
   }
 
   /// Generate a unique Firestore document ID for a squad
@@ -444,18 +583,31 @@ class FirebaseService {
     required List<String> memberNames,
     required String recentGame,
     String? tagline,
+    String? uid,
   }) async {
     try {
       final docRef =
           id != null && id.isNotEmpty ? _groupsCol.doc(id) : _groupsCol.doc();
       final squadCode = 'SQ-${docRef.id.toUpperCase().replaceAll('-', '')}';
+      final creatorUid = uid ?? currentUser?.uid;
+      final memberUids = <String>[];
+      if (creatorUid != null && creatorUid.isNotEmpty && creatorUid != 'guest') {
+        memberUids.add(creatorUid);
+      }
+      final cleanMemberNames = memberNames
+          .map((m) => m.replaceAll(' (You)', '').replaceAll('(You)', '').trim())
+          .where((m) => m.isNotEmpty)
+          .toList();
+
       await docRef.set({
         'name': name,
         'iconEmoji': iconEmoji,
-        'memberNames': memberNames,
+        'memberNames': cleanMemberNames,
+        'memberUids': memberUids,
         'recentGame': recentGame,
-        'tagline': tagline ?? '${memberNames.length} members',
+        'tagline': tagline ?? '${cleanMemberNames.length} members',
         'squadCode': squadCode,
+        'createdBy': creatorUid ?? 'guest',
         'createdAt': FieldValue.serverTimestamp(),
       });
       return docRef.id;
@@ -469,6 +621,7 @@ class FirebaseService {
   Future<Map<String, dynamic>?> joinSquadByCode({
     required String code,
     required String playerName,
+    String? uid,
   }) async {
     try {
       final formatted = code.trim();
@@ -495,13 +648,25 @@ class FirebaseService {
       if (targetDoc == null || !targetDoc.exists) return null;
 
       final data = targetDoc.data()!;
+      final currentUid = uid ?? currentUser?.uid;
+      final cleanName = playerName.replaceAll(' (You)', '').replaceAll('(You)', '').trim();
       final members = List<String>.from(data['memberNames'] ?? []);
-      if (!members.any((m) => m.toLowerCase() == playerName.toLowerCase())) {
-        members.add(playerName);
-        await targetDoc.reference.update({
-          'memberNames': members,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      final updates = <String, dynamic>{};
+
+      if (!members.any((m) => m.toLowerCase() == cleanName.toLowerCase())) {
+        members.add(cleanName);
+        updates['memberNames'] = members;
+      }
+      if (currentUid != null && currentUid.isNotEmpty && currentUid != 'guest') {
+        final existingUids = List<String>.from(data['memberUids'] ?? []);
+        if (!existingUids.contains(currentUid)) {
+          updates['memberUids'] = FieldValue.arrayUnion([currentUid]);
+        }
+      }
+
+      if (updates.isNotEmpty) {
+        updates['updatedAt'] = FieldValue.serverTimestamp();
+        await targetDoc.reference.update(updates);
       }
 
       return {'id': targetDoc.id, ...data, 'memberNames': members};

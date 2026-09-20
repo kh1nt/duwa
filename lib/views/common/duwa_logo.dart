@@ -1,126 +1,181 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-enum DuwaLogoSize { small, medium, large }
+enum DuwaLogoSize { small, medium, large, hero }
 
-/// Sleek, modern geometric brand identity for DUWA.
-/// Designed to feel market-competitive, social, energetic, and clean.
-class DuwaLogo extends StatelessWidget {
+/// The official brand identity for DUWA — "The Gamepad D".
+/// Features a single, clean squircle tile housing the Gamepad D symbol
+/// (directional D-pad on the left meeting a curved controller grip with twin action buttons).
+/// Features interactive haptics, spring animations, and luminous ambient pulse.
+class DuwaLogo extends StatefulWidget {
   final DuwaLogoSize size;
   final bool showWordmark;
-  final bool showBadge;
   final Color? textColor;
+  final bool withGlow;
+  final double? customSize;
+  final VoidCallback? onTap;
 
   const DuwaLogo({
     super.key,
     this.size = DuwaLogoSize.medium,
     this.showWordmark = true,
-    this.showBadge = true,
     this.textColor,
+    this.withGlow = false,
+    this.customSize,
+    this.onTap,
   });
 
   @override
+  State<DuwaLogo> createState() => _DuwaLogoState();
+}
+
+class _DuwaLogoState extends State<DuwaLogo> with SingleTickerProviderStateMixin {
+  late final AnimationController _tapController;
+  late final Animation<double> _scaleAnimation;
+  late final Animation<double> _glowAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _tapController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.90)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.90, end: 1.08)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.08, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 30,
+      ),
+    ]).animate(_tapController);
+
+    _glowAnimation = Tween<double>(begin: 1.0, end: 1.6).animate(
+      CurvedAnimation(parent: _tapController, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _tapController.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    HapticFeedback.lightImpact();
+    _tapController.forward(from: 0.0);
+    widget.onTap?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final (iconSize, fontSize, badgePadding) = switch (size) {
-      DuwaLogoSize.small => (32.0, 16.0, 3.0),
-      DuwaLogoSize.medium => (42.0, 22.0, 4.0),
-      DuwaLogoSize.large => (64.0, 32.0, 6.0),
+    final (iconSize, fontSize) = switch (widget.size) {
+      DuwaLogoSize.small => (32.0, 16.0),
+      DuwaLogoSize.medium => (42.0, 22.0),
+      DuwaLogoSize.large => (64.0, 32.0),
+      DuwaLogoSize.hero => (100.0, 40.0),
     };
 
-    final effectiveTextColor = textColor ?? Theme.of(context).colorScheme.onSurface;
+    final effectiveIconSize = widget.customSize ?? iconSize;
+    final effectiveTextColor = widget.textColor ?? Theme.of(context).colorScheme.onSurface;
+
+    Widget emblemWidget = GestureDetector(
+      onTap: _handleTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _tapController,
+        builder: (context, child) {
+          final scale = _scaleAnimation.value;
+          final glowMultiplier = _glowAnimation.value;
+
+          return Transform.scale(
+            scale: scale,
+            child: SizedBox(
+              width: effectiveIconSize,
+              height: effectiveIconSize,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Ambient Solar Flame glow aura behind the emblem
+                  if (widget.withGlow || _tapController.isAnimating)
+                    Container(
+                      width: effectiveIconSize * 0.85,
+                      height: effectiveIconSize * 0.85,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(effectiveIconSize * 0.22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF5E1E).withAlpha(
+                              ((widget.withGlow ? 110 : 50) * glowMultiplier)
+                                  .clamp(0, 255)
+                                  .toInt(),
+                            ),
+                            blurRadius: effectiveIconSize * 0.45 * glowMultiplier,
+                            spreadRadius: effectiveIconSize * 0.05 * glowMultiplier,
+                          ),
+                          BoxShadow(
+                            color: const Color(0xFFFFA114).withAlpha(
+                              ((widget.withGlow ? 60 : 25) * glowMultiplier)
+                                  .clamp(0, 255)
+                                  .toInt(),
+                            ),
+                            blurRadius: effectiveIconSize * 0.70 * glowMultiplier,
+                            spreadRadius: effectiveIconSize * 0.08 * glowMultiplier,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // DUWA Gamepad Logo (assets/images/duwa_gamepad_logo.jpg)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(effectiveIconSize * 0.22),
+                    child: Image.asset(
+                      'assets/images/duwa_gamepad_logo.jpg',
+                      width: effectiveIconSize,
+                      height: effectiveIconSize,
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    if (!widget.showWordmark) {
+      return emblemWidget;
+    }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Geometric Emblem
-        Container(
-          width: iconSize,
-          height: iconSize,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(iconSize * 0.32),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF4F46E5), Color(0xFF6366F1), Color(0xFF06B6D4)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF4F46E5).withAlpha(90),
-                blurRadius: iconSize * 0.35,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Controller / D-pad subtle overlay
-              Icon(
-                Icons.sports_esports_rounded,
-                size: iconSize * 0.58,
-                color: Colors.white,
-              ),
-              // Corner jewel accent
-              Positioned(
-                right: 3,
-                top: 3,
-                child: Container(
-                  width: iconSize * 0.18,
-                  height: iconSize * 0.18,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF34D399), // Emerald pulse
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
+        emblemWidget,
+        SizedBox(width: effectiveIconSize * 0.24),
+        Text(
+          'DUWA',
+          style: TextStyle(
+            color: effectiveTextColor,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
           ),
         ),
-
-        if (showWordmark) ...[
-          SizedBox(width: iconSize * 0.26),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'DUWA',
-                    style: TextStyle(
-                      color: effectiveTextColor,
-                      fontSize: fontSize,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  if (showBadge) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: badgePadding + 3, vertical: badgePadding * 0.5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4F46E5).withAlpha(25),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF4F46E5).withAlpha(80), width: 0.8),
-                      ),
-                      child: const Text(
-                        'SQUAD',
-                        style: TextStyle(
-                          color: Color(0xFF4F46E5),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ],
       ],
     );
   }
 }
+

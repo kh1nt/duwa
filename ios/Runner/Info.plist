@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Duwa</string>
+	<string>DUWA</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,5 +45,30 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DUWA requires photo library access to let you pick and upload your custom gamer avatar or squad banner.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>DUWA requires camera access to let you take and upload a profile photo.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>discord</string>
+		<string>whatsapp</string>
+		<string>mailto</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.duwa.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>duwa</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

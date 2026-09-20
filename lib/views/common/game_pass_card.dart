@@ -33,9 +33,14 @@ class GamePassCard extends StatelessWidget {
   RSVPStatus? get _myRsvp {
     final uid = currentUserId ?? 'p1';
     for (final p in session.players) {
-        final normalizedName = p.name.replaceAll(' (You)', '').trim().toLowerCase();
-        if (p.id == uid || p.id == 'p1' || p.name == 'You' || p.name.contains('(You)' ) ||
-          (currentUserName != null && normalizedName == currentUserName!.trim().toLowerCase())) {
+      final normalizedName = p.name.replaceAll(' (You)', '').trim().toLowerCase();
+      if (uid != 'p1' && uid != 'user-default' && p.id == uid) {
+        return p.rsvp;
+      }
+      if (currentUserName != null && currentUserName != 'Player' && normalizedName == currentUserName!.trim().toLowerCase()) {
+        return p.rsvp;
+      }
+      if ((uid == 'p1' || uid == 'user-default') && (p.id == 'p1' || p.name == 'You' || p.name.contains('(You)'))) {
         return p.rsvp;
       }
     }

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'game_model.dart';
 import 'group_model.dart';
 
@@ -127,6 +128,9 @@ class GameNightModel {
   final String? roomCode;
   final String? historyHighlight; // e.g. "MVP: You", "Win (32m)", "Completed"
   final String? subdetail;        // e.g. "Last Tuesday • 4 Duwaonon • 3-star streak"
+  final String? voiceChannelUrl;  // e.g. Discord voice link or Meet URL
+  final String? createdBy;
+  final List<String> playerUids;
 
   const GameNightModel({
     required this.id,
@@ -149,6 +153,9 @@ class GameNightModel {
     this.roomCode,
     this.historyHighlight,
     this.subdetail,
+    this.voiceChannelUrl,
+    this.createdBy,
+    this.playerUids = const [],
   });
 
   String get displayRoomCode => (roomCode != null && roomCode!.isNotEmpty)
@@ -167,8 +174,10 @@ class GameNightModel {
       formattedDate.toLowerCase().contains('today') ||
       formattedDate.toLowerCase().contains('tonight');
   String get weekdayShort => formattedDate.split(',').first;
-  int get maxPlayers => 5;
+  /// Dynamic squad size: accommodates squad growth gracefully without an artificial 5-player cap
+  int get maxPlayers => math.max(players.length >= 6 ? players.length + 2 : 8, players.length);
   String get description => subdetail ?? historyHighlight ?? '';
+  bool get hasVoiceChannel => voiceChannelUrl != null && voiceChannelUrl!.trim().isNotEmpty;
 
   GameNightModel copyWith({
     String? id,
@@ -191,6 +200,9 @@ class GameNightModel {
     String? roomCode,
     String? historyHighlight,
     String? subdetail,
+    String? voiceChannelUrl,
+    String? createdBy,
+    List<String>? playerUids,
   }) {
     return GameNightModel(
       id: id ?? this.id,
@@ -213,6 +225,9 @@ class GameNightModel {
       roomCode: roomCode ?? this.roomCode,
       historyHighlight: historyHighlight ?? this.historyHighlight,
       subdetail: subdetail ?? this.subdetail,
+      voiceChannelUrl: voiceChannelUrl ?? this.voiceChannelUrl,
+      createdBy: createdBy ?? this.createdBy,
+      playerUids: playerUids ?? this.playerUids,
     );
   }
 }

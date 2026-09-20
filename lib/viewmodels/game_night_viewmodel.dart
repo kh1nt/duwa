@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/game_model.dart';
@@ -22,19 +23,128 @@ class GameNightViewModel extends ChangeNotifier {
 
   List<GameNightModel> _sessions = [];
   final Set<String> _deletedSessionIds = {};
+  final Set<String> _joinedSessionIds = {};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sessionsSubscription;
+  StreamSubscription<List<GameModel>>? _gamesSubscription;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _lastCloudDocs = [];
 
   GameNightViewModel({bool withFixtureData = false}) {
     if (withFixtureData) {
       _sessions = _createFixtureSessions();
     }
-    initFirebaseCatalog();
+    // Only initialise the games catalog here; the session subscription must
+    // not start until we have a verified authenticated user (via syncCurrentUser).
+    _initGamesCatalog();
   }
 
   factory GameNightViewModel.withFixtureData() =>
       GameNightViewModel(withFixtureData: true);
 
+  /// Reset sessions state (called on account switch / logout).
+  /// Cancels all Firestore subscriptions but does NOT restart them — subscriptions
+  /// only restart once syncCurrentUser() is called with a valid user profile.
+  void reset({bool withFixtureData = false}) {
+    _sessionsSubscription?.cancel();
+    _gamesSubscription?.cancel();
+    _sessionsSubscription = null;
+    _gamesSubscription = null;
+    _lastCloudDocs = [];
+    _deletedSessionIds.clear();
+    _joinedSessionIds.clear();
+    _currentUserProfile = null;
+    _sessions = withFixtureData ? _createFixtureSessions() : [];
+    _initGamesCatalog(); // keep the games catalog fresh (no UID required)
+    notifyListeners();
+  }
+
+  bool _isUserInSession(Map<String, dynamic> data, String id) {
+    if (_joinedSessionIds.contains(id)) return true;
+
+    final currentUid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
+    final currentName = _currentUserProfile?.displayName.trim().toLowerCase() ??
+        FirebaseService().currentUser?.displayName?.trim().toLowerCase();
+
+    // If user identity is not yet known, show nothing.
+    if ((currentUid == null || currentUid == 'user-default') && currentName == null) {
+      return false;
+    }
+
+    final createdBy = data['createdBy'] as String?;
+    if (createdBy != null && currentUid != null && currentUid != 'user-default' && createdBy == currentUid) {
+      return true;
+    }
+
+    final playerUids = List<String>.from(data['playerUids'] ?? []);
+    if (currentUid != null && currentUid != 'user-default' && playerUids.contains(currentUid)) {
+      return true;
+    }
+
+    final organizer = (data['organizerName'] as String?)?.trim().toLowerCase();
+    if (organizer != null && currentName != null && currentName != 'player' && currentName != 'you' && organizer == currentName) {
+      return true;
+    }
+
+    final players = (data['players'] as List<dynamic>?) ?? [];
+    return players.any((item) {
+      if (item is Map<String, dynamic>) {
+        final pId = item['id'] as String? ?? item['uid'] as String?;
+        if (pId != null && currentUid != null && currentUid != 'user-default' && pId == currentUid) {
+          return true;
+        }
+        final name = (item['name'] as String?)?.replaceAll('(You)', '').trim().toLowerCase();
+        if (currentName != null && currentName != 'player' && currentName != 'you' && name == currentName) {
+          return true;
+        }
+        if (_currentUserProfile?.handle != null) {
+          final cleanHandle = _currentUserProfile!.handle.toLowerCase().replaceAll('@', '').trim();
+          if (cleanHandle.isNotEmpty && cleanHandle != 'gamer' && cleanHandle != 'you' && name == cleanHandle) {
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+  }
+
+  void _rebuildSessionsFromDocs() {
+    if (_lastCloudDocs.isEmpty) return;
+
+    final userSessionDocs = _lastCloudDocs
+        .where((doc) => _isUserInSession(doc.data(), doc.id))
+        .toList();
+
+    final cloudSessions = userSessionDocs.map((doc) {
+      return _mapFirestoreDocToSession(doc.id, doc.data());
+    }).toList();
+
+    final filteredCloud = cloudSessions
+        .where((s) => !_deletedSessionIds.contains(s.id))
+        .toList();
+    final cloudIds = filteredCloud.map((s) => s.id).toSet();
+
+    final pendingLocals = _sessions
+        .where((s) =>
+            !cloudIds.contains(s.id) &&
+            !_deletedSessionIds.contains(s.id) &&
+            !s.id.startsWith('gn-1') &&
+            !s.id.startsWith('gn-2'))
+        .toList();
+
+    _sessions = [...filteredCloud, ...pendingLocals];
+  }
+
   void syncCurrentUser(UserProfileModel profile) {
     _currentUserProfile = profile;
+
+    // If session subscriptions were cancelled (e.g. after reset() on an account
+    // switch) and we now have a valid authenticated user, restart them.
+    // The stream's first event will call _rebuildSessionsFromDocs() automatically.
+    if (_sessionsSubscription == null && profile.id != 'user-default') {
+      initFirebaseCatalog();
+      // Fall through — still update the "You" label on any locally-cached sessions.
+    } else {
+      _rebuildSessionsFromDocs();
+    }
 
     final userPlayer = PlayerModel(
       id: profile.id,
@@ -173,10 +283,13 @@ class GameNightViewModel extends ChangeNotifier {
   List<GameModel> _catalogGames = List<GameModel>.from(_defaultCatalog);
   List<GameModel> get catalogGames => _catalogGames;
 
-  void initFirebaseCatalog() {
+  /// Initialise the games catalog subscription only (no UID required).
+  /// Safe to call from the constructor and after reset().
+  void _initGamesCatalog() {
     try {
       FirebaseService().seedInitialGamesIfEmpty(_defaultCatalog);
-      FirebaseService().streamGames().listen(
+      _gamesSubscription?.cancel();
+      _gamesSubscription = FirebaseService().streamGames().listen(
         (cloudGames) {
           if (cloudGames.isNotEmpty) {
             final cloudIds = cloudGames.map((g) => g.id).toSet();
@@ -190,31 +303,33 @@ class GameNightViewModel extends ChangeNotifier {
           debugPrint('Firestore games stream error: $e');
         },
       );
+    } catch (e) {
+      debugPrint('Games catalog sync note (offline or test mode): $e');
+    }
+  }
 
-      FirebaseService().streamGameNights().listen(
+  /// Initialise BOTH the games catalog and the user-scoped session subscription.
+  /// Must only be called when a valid authenticated user is available — i.e.
+  /// after syncCurrentUser() has been called with a real user profile.
+  void initFirebaseCatalog() {
+    // Guard: refuse to subscribe to sessions if no authenticated user is known.
+    // This prevents the entire sessions collection from being read and shown to
+    // whoever happens to be looking at the screen during an account switch.
+    final uid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
+    if (uid == null || uid == 'user-default') {
+      debugPrint('initFirebaseCatalog: no authenticated user — session subscription skipped');
+      _initGamesCatalog();
+      return;
+    }
+
+    _initGamesCatalog();
+
+    try {
+      _sessionsSubscription?.cancel();
+      _sessionsSubscription = FirebaseService().streamGameNights(uid: uid).listen(
         (snapshot) {
-          final cloudSessions =
-              snapshot.docs.map((doc) {
-                return _mapFirestoreDocToSession(doc.id, doc.data());
-              }).toList();
-
-          final filteredCloud =
-              cloudSessions
-                  .where((s) => !_deletedSessionIds.contains(s.id))
-                  .toList();
-          final cloudIds = filteredCloud.map((s) => s.id).toSet();
-          final pendingLocals =
-              _sessions
-                  .where(
-                    (s) =>
-                        !cloudIds.contains(s.id) &&
-                        !_deletedSessionIds.contains(s.id) &&
-                        !s.id.startsWith('gn-1') &&
-                        !s.id.startsWith('gn-2'),
-                  )
-                  .toList();
-
-          _sessions = [...filteredCloud, ...pendingLocals];
+          _lastCloudDocs = snapshot.docs;
+          _rebuildSessionsFromDocs();
           notifyListeners();
         },
         onError: (e) {
@@ -222,7 +337,7 @@ class GameNightViewModel extends ChangeNotifier {
         },
       );
     } catch (e) {
-      debugPrint('Catalog live sync note (offline or test mode): $e');
+      debugPrint('Sessions live sync note (offline or test mode): $e');
     }
   }
 
@@ -231,6 +346,7 @@ class GameNightViewModel extends ChangeNotifier {
     required String genre,
     required String emoji,
     String? playerCount,
+    String? imageUrl,
   }) async {
     final (start, end) = _generateThemeGradients(genre, title);
     final newGame = GameModel(
@@ -240,6 +356,7 @@ class GameNightViewModel extends ChangeNotifier {
       emoji: emoji.trim().isNotEmpty ? emoji.trim() : '🎮',
       bannerGradientStart: start,
       bannerGradientEnd: end,
+      imageUrl: (imageUrl != null && imageUrl.trim().isNotEmpty) ? imageUrl.trim() : null,
       playerCountRecommendation:
           playerCount?.trim().isNotEmpty == true
               ? playerCount!.trim()
@@ -650,14 +767,20 @@ class GameNightViewModel extends ChangeNotifier {
           );
         }).toList();
 
+    final createdBy = data['createdBy'] as String?;
+    final playerUids = List<String>.from(data['playerUids'] ?? []);
+    final currentUid = FirebaseService().currentUser?.uid;
+    final isHost = (createdBy != null && currentUid != null && currentUid != 'user-default' && createdBy == currentUid);
+
     final rawPlayers = (data['players'] as List<dynamic>?) ?? [];
     final players =
         rawPlayers.map((item) {
           if (item is Map<String, dynamic>) {
             final name = item['name'] ?? 'Player';
             final rsvpStr = item['rsvp'] ?? 'going';
+            final pId = (item['id'] as String?) ?? (item['uid'] as String?) ?? 'p-${name.hashCode}';
             return PlayerModel(
-              id: 'p-${name.hashCode}',
+              id: pId,
               name: name,
               username:
                   '@${name.toString().toLowerCase().replaceAll(' ', '_')}',
@@ -777,6 +900,8 @@ class GameNightViewModel extends ChangeNotifier {
         tagline: '$groupName Squad',
         iconEmoji: '🎮',
         members: players,
+        createdBy: createdBy,
+        memberUids: playerUids,
       ),
       scheduledDateTime: scheduledDate,
       formattedDate:
@@ -793,7 +918,12 @@ class GameNightViewModel extends ChangeNotifier {
       drinks: drinks,
       checklist: checklist,
       organizerName: organizerName,
+      isHost: isHost,
+      createdBy: createdBy,
+      playerUids: playerUids,
       historyHighlight: isPast ? (data['historyHighlight'] as String? ?? 'Completed') : null,
+      subdetail: (data['subdetail'] as String?) ?? (data['description'] as String?),
+      voiceChannelUrl: data['voiceChannelUrl'] as String?,
     );
   }
 
@@ -1104,6 +1234,91 @@ class GameNightViewModel extends ChangeNotifier {
     }
   }
 
+  /// Update editable details of a session (title, date/time, host note, voice channel, location)
+  void updateSessionDetails(
+    String gameNightId, {
+    String? title,
+    String? description,
+    DateTime? scheduledDateTime,
+    String? formattedTime,
+    String? voiceChannelUrl,
+    String? locationName,
+  }) {
+    final cur = getSessionById(gameNightId);
+    if (cur.status == GameNightStatus.completed ||
+        cur.status == GameNightStatus.cancelled) {
+      return;
+    }
+    _updateSession(gameNightId, (session) {
+      String? newFormattedDate = session.formattedDate;
+      if (scheduledDateTime != null) {
+        const weekdays = [
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+          'Saturday',
+          'Sunday',
+        ];
+        const months = [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
+        final now = DateTime.now();
+        if (scheduledDateTime.year == now.year &&
+            scheduledDateTime.month == now.month &&
+            scheduledDateTime.day == now.day) {
+          newFormattedDate = 'Tonight';
+        } else {
+          newFormattedDate =
+              '${weekdays[scheduledDateTime.weekday - 1]}, ${months[scheduledDateTime.month - 1]} ${scheduledDateTime.day}';
+        }
+      }
+
+      LocationPrepModel? newLocation = session.location;
+      if (locationName != null && locationName.trim().isNotEmpty) {
+        newLocation = LocationPrepModel(
+          name: locationName.trim(),
+          detail: session.location?.detail,
+          isConfirmed: true,
+        );
+      }
+
+      return session.copyWith(
+        title: title?.trim().isNotEmpty == true ? title!.trim() : session.title,
+        subdetail: description?.trim().isNotEmpty == true
+            ? description!.trim()
+            : session.subdetail,
+        scheduledDateTime: scheduledDateTime ?? session.scheduledDateTime,
+        formattedDate: newFormattedDate,
+        formattedTime: formattedTime ?? session.formattedTime,
+        voiceChannelUrl: voiceChannelUrl ?? session.voiceChannelUrl,
+        location: newLocation,
+      );
+    });
+
+    FirebaseService().updateSessionDetails(
+      gameNightId: gameNightId,
+      title: title?.trim(),
+      description: description?.trim(),
+      date: scheduledDateTime,
+      time: formattedTime,
+      voiceChannelUrl: voiceChannelUrl?.trim(),
+      locationName: locationName?.trim(),
+    );
+  }
+
   void updatePlayerRSVP(
     String gameNightId,
     String playerId,
@@ -1115,17 +1330,40 @@ class GameNightViewModel extends ChangeNotifier {
       return;
     }
     _updateSession(gameNightId, (session) {
+      bool found = false;
       final updatedPlayers =
           session.players.map((p) {
             final isLegacyCurrentUser =
                 _currentUserProfile != null &&
                 p.name.replaceAll(' (You)', '').trim().toLowerCase() ==
                     _currentUserProfile!.displayName.trim().toLowerCase();
-            if (p.id == playerId || p.id == 'p1' || isLegacyCurrentUser) {
-              return p.copyWith(rsvp: status);
+            final matchesUid = playerId.isNotEmpty && playerId != 'p1' && p.id == playerId;
+            final matchesP1 = (playerId.isEmpty || playerId == 'p1') &&
+                (p.id == 'p1' || p.name == 'You' || p.name.contains('(You)'));
+            if (matchesUid || matchesP1 || isLegacyCurrentUser) {
+              found = true;
+              return p.copyWith(
+                id: playerId.isNotEmpty ? playerId : p.id,
+                rsvp: status,
+              );
             }
             return p;
           }).toList();
+
+      if (!found) {
+        final myName = _currentUserProfile?.displayName ?? 'You';
+        final myInitials = myName.isNotEmpty ? myName[0].toUpperCase() : 'U';
+        updatedPlayers.add(
+          PlayerModel(
+            id: playerId.isNotEmpty ? playerId : 'p1',
+            name: myName,
+            username: '@${myName.toLowerCase().replaceAll(' ', '_')}',
+            avatarInitials: myInitials,
+            avatarColorIndex: 0,
+            rsvp: status,
+          ),
+        );
+      }
       return session.copyWith(players: updatedPlayers);
     });
 
@@ -1133,6 +1371,7 @@ class GameNightViewModel extends ChangeNotifier {
       gameNightId: gameNightId,
       playerName: _currentUserProfile?.displayName ?? 'You',
       rsvp: status.name,
+      uid: playerId,
     );
   }
 
@@ -1492,9 +1731,14 @@ class GameNightViewModel extends ChangeNotifier {
               : null,
       checklist: List.from(_draftChecklist),
       isHost: true,
+      createdBy: _currentUserProfile?.id ?? FirebaseService().currentUser?.uid,
+      playerUids: (_currentUserProfile?.id != null && _currentUserProfile!.id != 'user-default')
+          ? [_currentUserProfile!.id]
+          : (FirebaseService().currentUser?.uid != null ? [FirebaseService().currentUser!.uid] : []),
     );
 
     _lastCreatedSession = newSession;
+    _joinedSessionIds.add(sessionId);
     _sessions.insert(0, newSession);
     _currentCreationStep = 3; // step 3 = success screen
     notifyListeners();
@@ -1561,19 +1805,24 @@ class GameNightViewModel extends ChangeNotifier {
               )
               .toList(),
       organizerName: newSession.organizerName,
+      uid: newSession.createdBy,
     );
   }
 
   /// Join a game night by its 6-character room code and ensure it is added to active sessions
   Future<GameNightModel?> joinSessionByCode(String roomCode) async {
     final myName = _currentUserProfile?.displayName ?? 'Player';
+    final currentUid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
     final data = await FirebaseService().joinGameNightByCode(
       roomCode: roomCode,
       playerName: myName,
+      uid: currentUid,
     );
     if (data == null) return null;
 
-    final session = _mapFirestoreDocToSession(data['id'] as String, data);
+    final docId = data['id'] as String;
+    _joinedSessionIds.add(docId);
+    final session = _mapFirestoreDocToSession(docId, data);
     final existingIndex = _sessions.indexWhere((s) => s.id == session.id);
     if (existingIndex != -1) {
       _sessions[existingIndex] = session;
@@ -1589,5 +1838,12 @@ class GameNightViewModel extends ChangeNotifier {
     _sessions.removeWhere((s) => s.id == sessionId);
     notifyListeners();
     await FirebaseService().deleteGameNight(sessionId);
+  }
+
+  @override
+  void dispose() {
+    _sessionsSubscription?.cancel();
+    _gamesSubscription?.cancel();
+    super.dispose();
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/duwa_theme.dart';
 import '../common/bouncy_tap.dart';
+import '../common/duwa_logo.dart';
 
 class DuwaNavRail extends StatelessWidget {
   final int currentIndex;
@@ -47,31 +48,11 @@ class DuwaNavRail extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: isCompact ? MainAxisAlignment.center : MainAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      gradient: duwaTheme.primaryGradient,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: duwaTheme.primaryAccent.withAlpha(90),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'D',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 20,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ),
+                  DuwaLogo(
+                    size: isCompact ? DuwaLogoSize.small : DuwaLogoSize.medium,
+                    showWordmark: false,
+                    withGlow: false,
+                    customSize: isCompact ? 36.0 : 42.0,
                   ),
                   if (!isCompact) ...[
                     const SizedBox(width: 12),
@@ -92,7 +73,7 @@ class DuwaNavRail extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            'Squad Gaming Hub',
+                            'Gaming Hub',
                             style: TextStyle(
                               color: duwaTheme.textMuted,
                               fontSize: 11,

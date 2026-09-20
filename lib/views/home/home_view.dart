@@ -15,9 +15,11 @@ import '../common/bouncy_tap.dart';
 import '../common/game_pass_card.dart';
 import '../common/hero_session_marquee.dart';
 import '../common/join_code_dialog.dart';
+import '../common/add_game_sheet.dart';
 import '../common/random_game_sheet.dart';
 import '../notifications/notifications_view.dart';
 import 'home_bento_hub.dart';
+import '../common/duwa_logo.dart';
 
 /// The home dashboard: a quick read on the squad, the next session, and the
 /// fastest ways to get everyone playing.
@@ -52,8 +54,13 @@ class HomeView extends StatelessWidget {
   RSVPStatus? _myRsvpForSession(GameNightModel s, String uid, String? userName) {
     for (final p in s.players) {
       final normalizedName = p.name.replaceAll(' (You)', '').trim().toLowerCase();
-      if (p.id == uid || p.id == 'p1' || p.name == 'You' || p.name.contains('(You)') ||
-          (userName != null && normalizedName == userName.trim().toLowerCase())) {
+      if (uid != 'p1' && uid != 'user-default' && p.id == uid) {
+        return p.rsvp;
+      }
+      if (userName != null && userName != 'Player' && normalizedName == userName.trim().toLowerCase()) {
+        return p.rsvp;
+      }
+      if ((uid == 'p1' || uid == 'user-default') && (p.id == 'p1' || p.name == 'You' || p.name.contains('(You)'))) {
         return p.rsvp;
       }
     }
@@ -62,138 +69,151 @@ class HomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = themeVm.themeData;
+    final listenables = <Listenable>[
+      gameNightVm,
+      groupsVm,
+      themeVm,
+      if (profileVm != null) profileVm!,
+      if (notificationsVm != null) notificationsVm!,
+    ];
 
-    final upcomingSessions = gameNightVm.upcomingSessions;
-    final currentUid = gameNightVm.currentUserProfile?.id ?? 'p1';
-    final currentUserName = gameNightVm.currentUserProfile?.displayName;
+    return ListenableBuilder(
+      listenable: Listenable.merge(listenables),
+      builder: (context, _) {
+        final t = themeVm.themeData;
 
-    // Detect user's dynamic priority context
-    GameNightModel? pendingInviteSession;
-    GameNightModel? activeVotingSession;
-    GameNightModel? incompletePrepSession;
+        final upcomingSessions = gameNightVm.upcomingSessions;
+        final currentUid = gameNightVm.currentUserProfile?.id ?? 'p1';
+        final currentUserName = gameNightVm.currentUserProfile?.displayName;
 
-    for (final s in upcomingSessions) {
-      final rsvp = _myRsvpForSession(s, currentUid, currentUserName);
-      if (pendingInviteSession == null && rsvp == RSVPStatus.pending) {
-        pendingInviteSession = s;
-      }
-      if (activeVotingSession == null && s.status == GameNightStatus.voting) {
-        activeVotingSession = s;
-      }
-      final hasUnassigned = s.checklist.any((i) => i.assignedTo == null || i.assignedTo!.isEmpty);
-      final needsFood = s.food == null || s.food!.title.isEmpty;
-      if (incompletePrepSession == null && (hasUnassigned || needsFood) && s.status != GameNightStatus.voting) {
-        incompletePrepSession = s;
-      }
-    }
+        // Detect user's dynamic priority context
+        GameNightModel? pendingInviteSession;
+        GameNightModel? activeVotingSession;
+        GameNightModel? incompletePrepSession;
 
-    final nextSession = upcomingSessions.isNotEmpty ? upcomingSessions.first : null;
-    final otherUpcoming = upcomingSessions.length > 1
-        ? upcomingSessions.sublist(1, upcomingSessions.length.clamp(1, 4))
-        : <GameNightModel>[];
+        for (final s in upcomingSessions) {
+          final rsvp = _myRsvpForSession(s, currentUid, currentUserName);
+          if (pendingInviteSession == null && rsvp == RSVPStatus.pending) {
+            pendingInviteSession = s;
+          }
+          if (activeVotingSession == null && s.status == GameNightStatus.voting) {
+            activeVotingSession = s;
+          }
+          final hasUnassigned = s.checklist.any((i) => i.assignedTo == null || i.assignedTo!.isEmpty);
+          final needsFood = s.food == null || s.food!.title.isEmpty;
+          if (incompletePrepSession == null && (hasUnassigned || needsFood) && s.status != GameNightStatus.voting) {
+            incompletePrepSession = s;
+          }
+        }
 
-    final recentSessions = gameNightVm.recentGameNights.take(2).toList();
+        final nextSession = upcomingSessions.isNotEmpty ? upcomingSessions.first : null;
+        final otherUpcoming = upcomingSessions.length > 1
+            ? upcomingSessions.sublist(1, upcomingSessions.length.clamp(1, 4))
+            : <GameNightModel>[];
 
-    return Scaffold(
-      backgroundColor: t.background,
-      appBar: _buildAppBar(context, t),
-      body: RefreshIndicator(
-        color: t.primaryAccent,
-        backgroundColor: t.surface,
-        onRefresh: () async => Future<void>.delayed(const Duration(milliseconds: 350)),
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 110),
-          children: [
-            _buildBriefingHeader(t, profileVm?.profile),
-            const SizedBox(height: 18),
+        final recentSessions = gameNightVm.recentGameNights.take(2).toList();
 
-            // 1. Dynamic Priority Section: Pending Invitation, Active Voting, Incomplete Prep (only if not hero)
-            if (pendingInviteSession != null && pendingInviteSession.id != nextSession?.id) ...[
-              _buildInvitationBanner(context, t, pendingInviteSession, currentUid),
-              const SizedBox(height: 16),
-            ] else if (activeVotingSession != null && activeVotingSession.id != nextSession?.id) ...[
-              _buildVotingActionBanner(context, t, activeVotingSession),
-              const SizedBox(height: 16),
-            ] else if (incompletePrepSession != null && incompletePrepSession.id != nextSession?.id) ...[
-              _buildPrepActionBanner(context, t, incompletePrepSession),
-              const SizedBox(height: 16),
-            ],
+        return Scaffold(
+          backgroundColor: t.background,
+          appBar: _buildAppBar(context, t),
+          body: RefreshIndicator(
+            color: t.primaryAccent,
+            backgroundColor: t.surface,
+            onRefresh: () async => Future<void>.delayed(const Duration(milliseconds: 350)),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 110),
+              children: [
+                _buildBriefingHeader(t, profileVm?.profile),
+                const SizedBox(height: 18),
 
-            // 2. Primary Hero Session (or Empty State)
-            _buildSectionHeader('Next Session', t),
-            const SizedBox(height: 10),
-            HeroSessionMarquee(
-              session: nextSession,
-              duwaTheme: t,
-              currentUserId: currentUid,
-              currentUserName: currentUserName,
-              onOpenSession: () {
-                if (nextSession != null) onOpenGameNight(nextSession);
-              },
-              onCreateSession: onCreateGameNight,
-              onRsvpChanged: nextSession != null
-                  ? (RSVPStatus newRsvp) {
-                      gameNightVm.updatePlayerRSVP(nextSession.id, currentUid, newRsvp);
-                    }
-                  : null,
-            ),
-            const SizedBox(height: 20),
-
-            // 3. Action Command Hub
-            _buildQuickActionStrip(context, t, activeVotingSession: activeVotingSession),
-            const SizedBox(height: 24),
-
-            // 4. Other Upcoming Game Nights / Sessions
-            if (otherUpcoming.isNotEmpty) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildSectionHeader('Upcoming Sessions', t, count: otherUpcoming.length),
-                  InkWell(
-                    onTap: onOpenSessions,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text(
-                        'See all',
-                        style: TextStyle(
-                          color: t.primaryAccent,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
+                // 1. Dynamic Priority Section: Pending Invitation, Active Voting, Incomplete Prep (only if not hero)
+                if (pendingInviteSession != null && pendingInviteSession.id != nextSession?.id) ...[
+                  _buildInvitationBanner(context, t, pendingInviteSession, currentUid),
+                  const SizedBox(height: 16),
+                ] else if (activeVotingSession != null && activeVotingSession.id != nextSession?.id) ...[
+                  _buildVotingActionBanner(context, t, activeVotingSession),
+                  const SizedBox(height: 16),
+                ] else if (incompletePrepSession != null && incompletePrepSession.id != nextSession?.id) ...[
+                  _buildPrepActionBanner(context, t, incompletePrepSession),
+                  const SizedBox(height: 16),
                 ],
-              ),
-              const SizedBox(height: 12),
-              ...otherUpcoming.map(
-                (s) => GamePassCard(
-                  session: s,
+
+                // 2. Primary Hero Session (or Empty State)
+                _buildSectionHeader('Next Session', t),
+                const SizedBox(height: 10),
+                HeroSessionMarquee(
+                  session: nextSession,
                   duwaTheme: t,
                   currentUserId: currentUid,
                   currentUserName: currentUserName,
-                  isCompact: true,
-                  onTap: () => onOpenGameNight(s),
-                  onRsvpChanged: (RSVPStatus status) {
-                    gameNightVm.updatePlayerRSVP(s.id, currentUid, status);
+                  onOpenSession: () {
+                    if (nextSession != null) onOpenGameNight(nextSession);
                   },
+                  onCreateSession: onCreateGameNight,
+                  onRsvpChanged: nextSession != null
+                      ? (RSVPStatus newRsvp) {
+                          gameNightVm.updatePlayerRSVP(nextSession.id, currentUid, newRsvp);
+                        }
+                      : null,
                 ),
-              ),
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 20),
 
-            // 5. Recent Sessions / History
-            if (recentSessions.isNotEmpty) ...[
-              _buildSectionHeader('Recent Sessions', t, count: recentSessions.length),
-              const SizedBox(height: 12),
-              ...recentSessions.map((s) => _buildArchiveTile(s, t)),
-            ],
-          ],
-        ),
-      ),
+                // 3. Action Command Hub
+                _buildQuickActionStrip(context, t, activeVotingSession: activeVotingSession),
+                const SizedBox(height: 24),
+
+                // 4. Other Upcoming Game Nights / Sessions
+                if (otherUpcoming.isNotEmpty) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildSectionHeader('Upcoming Sessions', t, count: otherUpcoming.length),
+                      InkWell(
+                        onTap: onOpenSessions,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Text(
+                            'See all',
+                            style: TextStyle(
+                              color: t.primaryAccent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ...otherUpcoming.map(
+                    (s) => GamePassCard(
+                      session: s,
+                      duwaTheme: t,
+                      currentUserId: currentUid,
+                      currentUserName: currentUserName,
+                      isCompact: true,
+                      onTap: () => onOpenGameNight(s),
+                      onRsvpChanged: (RSVPStatus status) {
+                        gameNightVm.updatePlayerRSVP(s.id, currentUid, status);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                // 5. Recent Sessions / History
+                if (recentSessions.isNotEmpty) ...[
+                  _buildSectionHeader('Recent Sessions', t, count: recentSessions.length),
+                  const SizedBox(height: 12),
+                  ...recentSessions.map((s) => _buildArchiveTile(s, t)),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -206,29 +226,14 @@ class HomeView extends StatelessWidget {
       title: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              gradient: t.primaryGradient,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: [
-                BoxShadow(
-                  color: t.primaryAccent.withAlpha(50),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Center(
-              child: Text(
-                'D',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  letterSpacing: -0.5,
-                ),
-              ),
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            child: DuwaLogo(
+              size: DuwaLogoSize.small,
+              showWordmark: false,
+              withGlow: false,
+              customSize: 36,
             ),
           ),
           const SizedBox(width: 10),
@@ -714,6 +719,14 @@ class HomeView extends StatelessWidget {
           context,
           games: gameNightVm.catalogGames,
           duwaTheme: t,
+          onAddGame: () {
+            Navigator.pop(context);
+            AddGameSheet.show(
+              context,
+              gameNightVm: gameNightVm,
+              duwaTheme: t,
+            );
+          },
           onPlanGame: (game) {
             if (onPlanWithGame != null) {
               onPlanWithGame!(game);

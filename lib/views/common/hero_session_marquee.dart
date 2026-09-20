@@ -10,7 +10,7 @@ import 'player_avatar.dart';
 /// The primary hero card on the home screen.
 /// Designed with high visual hierarchy, clean editorial typography,
 /// tactile attendance overview, and an immediate 1-tap RSVP bar.
-class HeroSessionMarquee extends StatelessWidget {
+class HeroSessionMarquee extends StatefulWidget {
   final GameNightModel? session;
   final DuwaThemeData duwaTheme;
   final VoidCallback onOpenSession;
@@ -30,16 +30,34 @@ class HeroSessionMarquee extends StatelessWidget {
     this.currentUserName,
   });
 
+  @override
+  State<HeroSessionMarquee> createState() => _HeroSessionMarqueeState();
+}
+
+class _HeroSessionMarqueeState extends State<HeroSessionMarquee> {
+  RSVPStatus? _optimisticRsvp;
+
+  @override
+  void didUpdateWidget(HeroSessionMarquee oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session?.id != widget.session?.id) {
+      _optimisticRsvp = null;
+    }
+  }
+
   RSVPStatus? get _myRsvp {
-    if (session == null) return null;
-    final uid = currentUserId ?? 'p1';
-    for (final p in session!.players) {
+    if (_optimisticRsvp != null) return _optimisticRsvp;
+    if (widget.session == null) return null;
+    final uid = widget.currentUserId ?? 'p1';
+    for (final p in widget.session!.players) {
       final normalizedName = p.name.replaceAll(' (You)', '').trim().toLowerCase();
-      if (p.id == uid ||
-          p.id == 'p1' ||
-          p.name == 'You' ||
-          p.name.contains('(You)') ||
-          (currentUserName != null && normalizedName == currentUserName!.trim().toLowerCase())) {
+      if (uid != 'p1' && uid != 'user-default' && p.id == uid) {
+        return p.rsvp;
+      }
+      if (widget.currentUserName != null && widget.currentUserName != 'Player' && normalizedName == widget.currentUserName!.trim().toLowerCase()) {
+        return p.rsvp;
+      }
+      if ((uid == 'p1' || uid == 'user-default') && (p.id == 'p1' || p.name == 'You' || p.name.contains('(You)'))) {
         return p.rsvp;
       }
     }
@@ -48,12 +66,12 @@ class HeroSessionMarquee extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (session == null) {
+    if (widget.session == null) {
       return _buildEmptyState();
     }
 
-    final s = session!;
-    final t = duwaTheme;
+    final s = widget.session!;
+    final t = widget.duwaTheme;
     final isDark = t.isDark;
     final isVoting = s.status == GameNightStatus.voting;
     final gameTitle = s.selectedGame?.title ?? (isVoting ? 'Squad Game Vote' : s.title);
@@ -143,7 +161,7 @@ class HeroSessionMarquee extends StatelessWidget {
 
           // 2. Main Game & Session Info Area (Tappable for details)
           BouncyTap(
-            onTap: onOpenSession,
+            onTap: widget.onOpenSession,
             scaleDown: 0.99,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -259,7 +277,7 @@ class HeroSessionMarquee extends StatelessWidget {
           // 3. Bottom Interactive Action Row: 1-Tap RSVP or Vote
           if (isVoting)
             _buildVotingRow(s, t)
-          else if (onRsvpChanged != null)
+          else if (widget.onRsvpChanged != null)
             _buildRsvpRow(current, t),
         ],
       ),
@@ -289,7 +307,10 @@ class HeroSessionMarquee extends StatelessWidget {
               child: BouncyTap(
                 onTap: () {
                   HapticFeedback.selectionClick();
-                  onRsvpChanged?.call(rsvpStatus);
+                  setState(() {
+                    _optimisticRsvp = rsvpStatus;
+                  });
+                  widget.onRsvpChanged?.call(rsvpStatus);
                 },
                 scaleDown: 0.95,
                 child: AnimatedContainer(
@@ -333,7 +354,7 @@ class HeroSessionMarquee extends StatelessWidget {
 
   Widget _buildVotingRow(GameNightModel s, DuwaThemeData t) {
     return BouncyTap(
-      onTap: onOpenSession,
+      onTap: widget.onOpenSession,
       scaleDown: 0.98,
       child: Container(
         height: 46,
@@ -360,7 +381,7 @@ class HeroSessionMarquee extends StatelessWidget {
   }
 
   Widget _buildEmptyState() {
-    final t = duwaTheme;
+    final t = widget.duwaTheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
       decoration: BoxDecoration(
@@ -407,7 +428,7 @@ class HeroSessionMarquee extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           BouncyTap(
-            onTap: onCreateSession,
+            onTap: widget.onCreateSession,
             scaleDown: 0.95,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),

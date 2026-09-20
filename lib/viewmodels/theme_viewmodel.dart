@@ -1,9 +1,30 @@
 import 'package:flutter/material.dart';
 import '../core/theme/duwa_colors.dart';
 import '../core/theme/duwa_theme.dart';
+import '../services/preferences_service.dart';
 
 class ThemeViewModel extends ChangeNotifier {
   DuwaThemeVibe _currentVibe = DuwaThemeVibe.obsidianVoid;
+
+  ThemeViewModel({DuwaThemeVibe? initialVibe}) {
+    if (initialVibe != null) {
+      _currentVibe = initialVibe;
+    } else {
+      _loadPersistedVibe();
+    }
+  }
+
+  void _loadPersistedVibe() {
+    final saved = PreferencesService().getThemeVibe();
+    if (saved != null) {
+      for (final vibe in DuwaThemeVibe.values) {
+        if (vibe.name == saved) {
+          _currentVibe = vibe;
+          break;
+        }
+      }
+    }
+  }
 
   DuwaThemeVibe get currentVibe => _currentVibe;
 
@@ -25,13 +46,14 @@ class ThemeViewModel extends ChangeNotifier {
   void setVibe(DuwaThemeVibe vibe) {
     if (_currentVibe == vibe) return;
     _currentVibe = vibe;
+    PreferencesService().setThemeVibe(vibe.name);
     notifyListeners();
   }
 
   void toggleVibe() {
-    _currentVibe = (_currentVibe == DuwaThemeVibe.obsidianVoid)
+    final next = (_currentVibe == DuwaThemeVibe.obsidianVoid)
         ? DuwaThemeVibe.cleanLight
         : DuwaThemeVibe.obsidianVoid;
-    notifyListeners();
+    setVibe(next);
   }
 }

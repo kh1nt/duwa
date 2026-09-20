@@ -68,6 +68,8 @@ class GamerGroupModel {
   final List<PlayerModel> members;
   final int totalGameNights;
   final String recentGame;
+  final String? createdBy;
+  final List<String> memberUids;
 
   const GamerGroupModel({
     required this.id,
@@ -77,6 +79,8 @@ class GamerGroupModel {
     required this.members,
     this.totalGameNights = 0,
     this.recentGame = 'Valorant',
+    this.createdBy,
+    this.memberUids = const [],
   });
 
   int get memberCount => members.length;
@@ -89,6 +93,8 @@ class GamerGroupModel {
     List<PlayerModel>? members,
     int? totalGameNights,
     String? recentGame,
+    String? createdBy,
+    List<String>? memberUids,
   }) {
     return GamerGroupModel(
       id: id ?? this.id,
@@ -98,6 +104,8 @@ class GamerGroupModel {
       members: members ?? this.members,
       totalGameNights: totalGameNights ?? this.totalGameNights,
       recentGame: recentGame ?? this.recentGame,
+      createdBy: createdBy ?? this.createdBy,
+      memberUids: memberUids ?? this.memberUids,
     );
   }
 

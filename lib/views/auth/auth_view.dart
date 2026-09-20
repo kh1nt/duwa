@@ -351,60 +351,36 @@ class _AuthViewState extends State<AuthView> {
                     ],
                   ),
 
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      gradient: t.primaryGradient,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: t.primaryAccent.withAlpha(80),
-                          blurRadius: 18,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.sports_esports_rounded,
-                      color: Colors.white,
-                      size: 38,
-                    ),
+                  // Brand Hero Logo
+                  const DuwaLogo(
+                    size: DuwaLogoSize.large,
+                    showWordmark: false,
+                    withGlow: true,
                   ).animate().scale(
                     curve: Curves.easeOutBack,
-                    duration: 400.ms,
-                  ),
+                    duration: 500.ms,
+                  ).fadeIn(duration: 400.ms),
                   const SizedBox(height: 16),
 
                   // Brand Title
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const DuwaLogo(
-                        size: DuwaLogoSize.medium,
-                        showWordmark: false,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'duwa',
-                        style: TextStyle(
-                          color: t.textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1.2,
-                        ),
-                      ),
-                    ],
-                  ),
+                  Text(
+                    'DUWA',
+                    style: TextStyle(
+                      color: t.textPrimary,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
+                  ).animate().fadeIn(delay: 150.ms, duration: 400.ms).slideY(begin: 0.15, curve: Curves.easeOut),
                   const SizedBox(height: 6),
                   Text(
-                    'Squad gaming sessions made simple.',
+                    'Gaming sessions made simple',
                     style: TextStyle(
                       color: t.textSecondary,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
-                  ),
+                  ).animate().fadeIn(delay: 250.ms, duration: 400.ms),
                   const SizedBox(height: 24),
 
                   // Active Card with smooth animated transition

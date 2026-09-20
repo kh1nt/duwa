@@ -184,19 +184,7 @@ class ProfileView extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              _setting(
-                context,
-                Icons.info_outline_rounded,
-                'About DUWA',
-                'Squad gaming made simple · Version 1.0.0',
-                t,
-                () => showAboutDialog(
-                  context: context,
-                  applicationName: 'DUWA',
-                  applicationVersion: '1.0.0',
-                ),
-              ),
+
               const SizedBox(height: 8),
               _setting(
                 context,
@@ -715,7 +703,7 @@ class ProfileView extends StatelessWidget {
       onTap: tap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(15),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: t.surface,
           borderRadius: BorderRadius.circular(16),
@@ -724,15 +712,15 @@ class ProfileView extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
                 color: t.surfaceLight,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: t.primaryAccent, size: 19),
+              child: Icon(icon, color: t.primaryAccent, size: 20),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -742,7 +730,8 @@ class ProfileView extends StatelessWidget {
                     style: TextStyle(
                       color: t.textPrimary,
                       fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      fontSize: 15,
+                      letterSpacing: -0.2,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -750,12 +739,16 @@ class ProfileView extends StatelessWidget {
                     sub,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: t.textMuted, fontSize: 11),
+                    style: TextStyle(
+                      color: t.textSecondary,
+                      fontSize: 13,
+                      height: 1.3,
+                    ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: t.textMuted),
+            Icon(Icons.chevron_right_rounded, color: t.textMuted, size: 20),
           ],
         ),
       ),

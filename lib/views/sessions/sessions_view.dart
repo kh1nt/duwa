@@ -402,8 +402,16 @@ class _SessionsViewState extends State<SessionsView> {
 
   RSVPStatus? _myRsvp(GameNightModel s) {
     final userId = widget.gameNightVm.currentUserProfile?.id;
+    final userName = widget.gameNightVm.currentUserProfile?.displayName;
     for (final player in s.players) {
-      if (player.id == userId || player.id == 'p1' || player.name == 'You' || player.name.contains('(You)')) {
+      if (userId != null && userId != 'user-default' && player.id == userId) {
+        return player.rsvp;
+      }
+      if (userName != null && userName != 'Player' && player.name == userName) {
+        return player.rsvp;
+      }
+      if ((userId == null || userId == 'user-default') &&
+          (player.id == 'p1' || player.name == 'You' || player.name.contains('(You)'))) {
         return player.rsvp;
       }
     }

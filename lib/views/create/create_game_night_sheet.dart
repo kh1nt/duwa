@@ -7,9 +7,9 @@ import '../../models/game_model.dart';
 import '../../models/group_model.dart';
 import '../../viewmodels/game_night_viewmodel.dart';
 import '../../viewmodels/groups_viewmodel.dart';
+import '../common/add_game_sheet.dart';
 import '../common/bouncy_tap.dart';
 import '../common/celebration_overlay.dart';
-import '../common/duwa_buttons.dart';
 import '../common/game_pass_card.dart';
 
 /// Mission Ignition Wizard:
@@ -448,14 +448,8 @@ class _CreateGameNightSheetState extends State<CreateGameNightSheet> {
         ),
         const SizedBox(height: 18),
 
-        // Quick Squad Templates Strip
-        _fieldLabel('1-TAP SQUAD TEMPLATES', t),
-        const SizedBox(height: 8),
-        _buildQuickTemplates(t),
-        const SizedBox(height: 18),
-
-        // Quick Presets Strip
-        _fieldLabel('TIMING PRESETS', t),
+        // Quick Timing Presets Strip
+        _fieldLabel('QUICK TIMING', t),
         const SizedBox(height: 8),
         _buildTimingPresets(t),
         const SizedBox(height: 18),
@@ -641,125 +635,11 @@ class _CreateGameNightSheetState extends State<CreateGameNightSheet> {
     );
   }
 
-  Widget _buildQuickTemplates(DuwaThemeData t) {
-    final now = DateTime.now();
-    final templates = [
-      (
-        '🎯 Friday Ranked',
-        'Valorant · Voice #1',
-        'Friday Ranked Valorant',
-        now.add(Duration(days: ((DateTime.friday - now.weekday) % 7 + 7) % 7)),
-        '8:00 PM',
-        'game-val',
-        'Discord Voice #1',
-      ),
-      (
-        '🍳 Chaos Co-op',
-        'Overcooked! 2 · Voice #2',
-        'Overcooked! 2 Chaos Session',
-        now.add(
-          Duration(days: ((DateTime.saturday - now.weekday) % 7 + 7) % 7),
-        ),
-        '2:30 PM',
-        'game-oc2',
-        'Discord Voice #2',
-      ),
-      (
-        '🚀 Helldivers Raid',
-        'Helldivers 2 · Voice #1',
-        'Helldivers Galactic Defense',
-        now.add(const Duration(days: 1)),
-        '9:00 PM',
-        'game-hd2',
-        'Discord Voice #1',
-      ),
-      (
-        '🎲 Tabletop Chill',
-        'Catan · Chill & Snacks',
-        'Settlers of Catan Hangout',
-        now.add(Duration(days: ((DateTime.sunday - now.weekday) % 7 + 7) % 7)),
-        '3:00 PM',
-        'game-catan',
-        'Living Room / Discord',
-      ),
-    ];
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children:
-            templates.map((tpl) {
-              return Container(
-                margin: const EdgeInsets.only(right: 8),
-                child: BouncyTap(
-                  onTap: () {
-                    _titleController.text = tpl.$3;
-                    widget.gameNightVm.setDraftTitle(tpl.$3);
-                    widget.gameNightVm.setDraftDateTime(tpl.$4, tpl.$5);
-                    _locationController.text = tpl.$7;
-                    widget.gameNightVm.setDraftLocation(tpl.$7);
-
-                    final matchedGame =
-                        widget.gameNightVm.catalogGames
-                            .where((g) => g.id == tpl.$6)
-                            .firstOrNull;
-                    if (matchedGame != null) {
-                      widget.gameNightVm.selectSingleDraftGame(matchedGame);
-                    }
-                    HapticFeedback.selectionClick();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Applied "${tpl.$1}" template!'),
-                        backgroundColor: t.primaryAccent,
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  scaleDown: 0.96,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: t.surfaceLight,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: t.cardBorder),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tpl.$1,
-                          style: TextStyle(
-                            color: t.textPrimary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          tpl.$2,
-                          style: TextStyle(color: t.textMuted, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-      ),
-    );
-  }
-
   Widget _buildTimingPresets(DuwaThemeData t) {
     final now = DateTime.now();
     final presets = [
-      ('Morning Scrim · 10:00 AM', now, '10:00 AM'),
-      ('Afternoon Run · 2:00 PM', now, '2:00 PM'),
-      ('Prime Time · 7:00 PM', now, '7:00 PM'),
-      ('Late Night · 10:30 PM', now, '10:30 PM'),
+      ('Tonight · 8:00 PM', now, '8:00 PM'),
+      ('Tomorrow · 8:00 PM', now.add(const Duration(days: 1)), '8:00 PM'),
       (
         'Weekend Raid · Sat 3:00 PM',
         now.add(
@@ -777,25 +657,33 @@ class _CreateGameNightSheetState extends State<CreateGameNightSheet> {
             return BouncyTap(
               onTap: () {
                 widget.gameNightVm.setDraftDateTime(p.$2, p.$3);
+                HapticFeedback.selectionClick();
               },
               scaleDown: 0.94,
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
+                  horizontal: 13,
+                  vertical: 9,
                 ),
                 decoration: BoxDecoration(
                   color: t.surfaceLight,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: t.cardBorder),
                 ),
-                child: Text(
-                  p.$1,
-                  style: TextStyle(
-                    color: t.textPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt_rounded, size: 14, color: t.primaryAccent),
+                    const SizedBox(width: 5),
+                    Text(
+                      p.$1,
+                      style: TextStyle(
+                        color: t.textPrimary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -1075,179 +963,24 @@ class _CreateGameNightSheetState extends State<CreateGameNightSheet> {
     );
   }
 
-  void _showAddCustomGameSheet(BuildContext context, DuwaThemeData t) {
-    final titleController = TextEditingController();
-    final genreController = TextEditingController();
-    final playersController = TextEditingController(text: '4-8 players');
-    String selectedEmoji = '⚔️';
-    final emojis = [
-      '⚔️',
-      '🎮',
-      '🛡️',
-      '🧙‍♂️',
-      '🏹',
-      '🐉',
-      '🎲',
-      '🏎️',
-      '🚀',
-      '🎯',
-      '👾',
-      '🕹️',
-      '🍕',
-      '🔥',
-    ];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder:
-          (sheetContext) => StatefulBuilder(
-            builder:
-                (context, setSheetState) => Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(22),
-                    decoration: BoxDecoration(
-                      color: t.surface,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(26),
-                      ),
-                      border: Border.all(color: t.cardBorder),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Add Custom Game',
-                              style: TextStyle(
-                                color: t.textPrimary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close_rounded),
-                              color: t.textMuted,
-                              onPressed: () => Navigator.pop(sheetContext),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        _fieldLabel('ICON EMOJI', t),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          height: 44,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: emojis.length,
-                            separatorBuilder:
-                                (_, __) => const SizedBox(width: 8),
-                            itemBuilder: (_, i) {
-                              final e = emojis[i];
-                              final isSel = selectedEmoji == e;
-                              return InkWell(
-                                onTap:
-                                    () =>
-                                        setSheetState(() => selectedEmoji = e),
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  width: 44,
-                                  height: 44,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        isSel
-                                            ? t.primaryAccent.withAlpha(35)
-                                            : t.surfaceHighest,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color:
-                                          isSel
-                                              ? t.primaryAccent
-                                              : Colors.transparent,
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    e,
-                                    style: const TextStyle(fontSize: 20),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _fieldLabel('TITLE', t),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: titleController,
-                          style: TextStyle(color: t.textPrimary),
-                          decoration: const InputDecoration(
-                            hintText: 'e.g. Helldivers 2, Tekken 8',
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _fieldLabel('GENRE / DESCRIPTION', t),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: genreController,
-                          style: TextStyle(color: t.textPrimary),
-                          decoration: const InputDecoration(
-                            hintText: 'e.g. 4-Player Co-op Galactic Shooter',
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        DuwaButton(
-                          label: 'Add to Catalog',
-                          icon: Icons.check_rounded,
-                          isFullWidth: true,
-                          onPressed: () async {
-                            final title = titleController.text.trim();
-                            if (title.isEmpty) return;
-                            final genre =
-                                genreController.text.trim().isNotEmpty
-                                    ? genreController.text.trim()
-                                    : 'Custom Title';
-
-                            final newGame = await widget.gameNightVm
-                                .createAndSaveCustomGame(
-                                  title: title,
-                                  genre: genre,
-                                  emoji: selectedEmoji,
-                                  playerCount: playersController.text.trim(),
-                                );
-
-                            if (context.mounted) Navigator.pop(sheetContext);
-
-                            setState(() {
-                              if (!_isVotingMode) {
-                                widget.gameNightVm.selectSingleDraftGame(
-                                  newGame,
-                                );
-                              } else {
-                                if (!widget.gameNightVm.draftSelectedGames.any(
-                                  (g) => g.id == newGame.id,
-                                )) {
-                                  widget.gameNightVm.toggleDraftGame(newGame);
-                                }
-                              }
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-          ),
+  void _showAddCustomGameSheet(BuildContext context, DuwaThemeData t) async {
+    final newGame = await AddGameSheet.show(
+      context,
+      gameNightVm: widget.gameNightVm,
+      duwaTheme: t,
     );
+
+    if (newGame != null && mounted) {
+      setState(() {
+        if (!_isVotingMode) {
+          widget.gameNightVm.selectSingleDraftGame(newGame);
+        } else {
+          if (!widget.gameNightVm.draftSelectedGames.any((g) => g.id == newGame.id)) {
+            widget.gameNightVm.toggleDraftGame(newGame);
+          }
+        }
+      });
+    }
   }
 
   // ===================== STEP 2: SQUAD & PLANS =====================

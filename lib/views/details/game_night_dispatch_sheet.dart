@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import '../../core/theme/duwa_colors.dart';
 import '../../core/theme/duwa_theme.dart';
 import '../../models/game_night_model.dart';
+import '../../services/calendar_service.dart';
 import '../../services/discord_service.dart';
 import '../common/bouncy_tap.dart';
+import 'calendar_export_sheet.dart';
 
 enum DispatchFormat { discord, whatsApp }
 
@@ -74,6 +76,8 @@ class _GameNightDispatchSheetState extends State<GameNightDispatchSheet> {
       buffer.writeln('🎒 **Bring List**: All items claimed! 🎉');
     }
 
+    final calUrl = CalendarService().generateGoogleCalendarUrl(s);
+    buffer.writeln('📅 **Add to Calendar**: $calUrl');
     buffer.writeln('');
     buffer.writeln('🔑 **DUWA Room Code**: `${s.displayRoomCode}`');
     buffer.writeln('👉 *Cast your vote and join in DUWA!*');
@@ -105,6 +109,8 @@ class _GameNightDispatchSheetState extends State<GameNightDispatchSheet> {
       buffer.writeln('🎒 Still needed: ${unclaimed.join(', ')}');
     }
 
+    final calUrl = CalendarService().generateGoogleCalendarUrl(s);
+    buffer.writeln('📅 Add to Calendar: $calUrl');
     buffer.writeln('');
     buffer.writeln('🔑 Room Code: ${s.displayRoomCode}');
     buffer.writeln('Join in the DUWA app to vote & play!');
@@ -470,8 +476,44 @@ class _GameNightDispatchSheetState extends State<GameNightDispatchSheet> {
                         ),
                       ),
 
+                      const SizedBox(width: 8),
+
+                      // Add to Calendar
+                      Expanded(
+                        child: BouncyTap(
+                          onTap: () => CalendarExportSheet.show(
+                            context,
+                            gameNight: s,
+                            duwaTheme: widget.duwaTheme,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1E2E),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: borderCol),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.edit_calendar_rounded, color: Color(0xFF00F59B), size: 15),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Calendar',
+                                  style: TextStyle(
+                                    color: textPrimaryCol,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
                       if (isDiscord) ...[
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         // Broadcast to Discord Webhook
                         Expanded(
                           child: BouncyTap(
@@ -489,7 +531,7 @@ class _GameNightDispatchSheetState extends State<GameNightDispatchSheet> {
                                   Icon(Icons.send_rounded, color: Color(0xFF8EA1E1), size: 15),
                                   SizedBox(width: 6),
                                   Text(
-                                    'Send Webhook',
+                                    'Webhook',
                                     style: TextStyle(
                                       color: Color(0xFFE0E7FF),
                                       fontWeight: FontWeight.w700,

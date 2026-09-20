@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/group_model.dart';
 import '../models/user_profile_model.dart';
@@ -6,6 +8,8 @@ import '../services/firebase_service.dart';
 class GroupsViewModel extends ChangeNotifier {
   List<GamerGroupModel> _groups = [];
   final Set<String> _deletedGroupIds = {};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _squadsSubscription;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _lastCloudDocs = [];
 
   List<GamerGroupModel> get groups => List.unmodifiable(_groups);
 
@@ -13,10 +17,24 @@ class GroupsViewModel extends ChangeNotifier {
     if (withFixtureData) {
       _groups = _createFixtureGroups();
     }
-    initFirebaseSquads();
+    // Do NOT subscribe here — wait for syncCurrentUser() with a valid user profile.
   }
 
   factory GroupsViewModel.withFixtureData() => GroupsViewModel(withFixtureData: true);
+
+  /// Reset squad state (called on account switch / logout).
+  /// Cancels subscriptions but does NOT restart them — they restart only once
+  /// syncCurrentUser() is called with a valid user profile.
+  void reset({bool withFixtureData = false}) {
+    _squadsSubscription?.cancel();
+    _squadsSubscription = null;
+    _lastCloudDocs = [];
+    _deletedGroupIds.clear();
+    _groups = withFixtureData ? _createFixtureGroups() : [];
+    _selectedGroup = _groups.isNotEmpty ? _groups.first : null;
+    _currentUserProfile = null;
+    notifyListeners();
+  }
 
   static List<GamerGroupModel> _createFixtureGroups() => [
         const GamerGroupModel(
@@ -36,47 +54,96 @@ class GroupsViewModel extends ChangeNotifier {
         ),
       ];
 
+  bool _isUserMemberOfSquad(Map<String, dynamic> data) {
+    final currentUid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
+    final currentName = _currentUserProfile?.displayName.trim().toLowerCase() ??
+        FirebaseService().currentUser?.displayName?.trim().toLowerCase();
+
+    // If user identity is not yet known, show nothing.
+    if ((currentUid == null || currentUid == 'user-default') && currentName == null) {
+      return false;
+    }
+
+    final createdBy = data['createdBy'] as String?;
+    if (createdBy != null && currentUid != null && currentUid != 'user-default' && createdBy == currentUid) {
+      return true;
+    }
+
+    final memberUids = List<String>.from(data['memberUids'] ?? []);
+    if (currentUid != null && currentUid != 'user-default' && memberUids.contains(currentUid)) {
+      return true;
+    }
+
+    final memberNames = List<String>.from(data['memberNames'] ?? []);
+    if (memberNames.isEmpty) return false;
+
+    return memberNames.any((m) {
+      final norm = m.replaceAll('(You)', '').trim().toLowerCase();
+      if (currentName != null && currentName != 'player' && currentName != 'you' && norm == currentName) return true;
+      if (_currentUserProfile?.handle != null) {
+        final cleanHandle = _currentUserProfile!.handle.toLowerCase().replaceAll('@', '').trim();
+        if (cleanHandle.isNotEmpty && cleanHandle != 'gamer' && cleanHandle != 'you' && norm == cleanHandle) return true;
+      }
+      return false;
+    });
+  }
+
+  void _rebuildGroupsFromDocs() {
+    if (_lastCloudDocs.isEmpty) return;
+
+    final userSquadDocs = _lastCloudDocs.where((doc) => _isUserMemberOfSquad(doc.data())).toList();
+    final cloudGroups = userSquadDocs.map((doc) {
+      final data = doc.data();
+      final memberNames = List<String>.from(data['memberNames'] ?? []);
+      final members = memberNames.map((name) => PlayerModel(
+        id: 'p-${name.hashCode}',
+        name: name,
+        username: '@${name.toLowerCase().replaceAll(' ', '_')}',
+        avatarInitials: name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'P',
+        avatarColorIndex: (name.hashCode % 6).abs(),
+        rsvp: RSVPStatus.going,
+      )).toList();
+
+      return GamerGroupModel(
+        id: doc.id,
+        name: data['name'] ?? 'Squad',
+        tagline: data['tagline'] ?? '${members.length} members',
+        iconEmoji: data['iconEmoji'] ?? '🎮',
+        recentGame: data['recentGame'] ?? 'Valorant',
+        members: members,
+        createdBy: data['createdBy'] as String?,
+        memberUids: List<String>.from(data['memberUids'] ?? []),
+      );
+    }).toList();
+
+    final filteredCloud = cloudGroups.where((g) => !_deletedGroupIds.contains(g.id)).toList();
+    final cloudIds = filteredCloud.map((g) => g.id).toSet();
+
+    final pendingLocals = _groups.where((g) => !cloudIds.contains(g.id) && !_deletedGroupIds.contains(g.id) && !g.id.startsWith('group-1')).toList();
+
+    _groups = [...filteredCloud, ...pendingLocals];
+    if (_selectedGroup != null && _deletedGroupIds.contains(_selectedGroup!.id)) {
+      _selectedGroup = _groups.isNotEmpty ? _groups.first : null;
+    } else if (_selectedGroup != null) {
+      final match = _groups.where((g) => g.id == _selectedGroup!.id);
+      if (match.isNotEmpty) {
+        _selectedGroup = match.first;
+      }
+    }
+  }
+
   void initFirebaseSquads() {
+    // Guard: only subscribe to squad data when we have a valid authenticated user.
+    final uid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
+    if (uid == null || uid == 'user-default') {
+      debugPrint('initFirebaseSquads: no authenticated user — subscription skipped');
+      return;
+    }
     try {
-      FirebaseService().streamGroups().listen((snapshot) {
-        final cloudGroups = snapshot.docs.map((doc) {
-          final data = doc.data();
-          final memberNames = List<String>.from(data['memberNames'] ?? []);
-          final members = memberNames.map((name) => PlayerModel(
-            id: 'p-${name.hashCode}',
-            name: name,
-            username: '@${name.toLowerCase().replaceAll(' ', '_')}',
-            avatarInitials: name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'P',
-            avatarColorIndex: (name.hashCode % 6).abs(),
-            rsvp: RSVPStatus.going,
-          )).toList();
-
-          return GamerGroupModel(
-            id: doc.id,
-            name: data['name'] ?? 'Squad',
-            tagline: data['tagline'] ?? '${members.length} members',
-            iconEmoji: data['iconEmoji'] ?? '🎮',
-            recentGame: data['recentGame'] ?? 'Valorant',
-            members: members,
-          );
-        }).toList();
-
-        // Filter out any locally deleted squads
-        final filteredCloud = cloudGroups.where((g) => !_deletedGroupIds.contains(g.id)).toList();
-        final cloudIds = filteredCloud.map((g) => g.id).toSet();
-
-        // Keep local groups that haven't hit the cloud yet and aren't deleted
-        final pendingLocals = _groups.where((g) => !cloudIds.contains(g.id) && !_deletedGroupIds.contains(g.id) && !g.id.startsWith('group-1')).toList();
-
-        _groups = [...filteredCloud, ...pendingLocals];
-        if (_selectedGroup != null && _deletedGroupIds.contains(_selectedGroup!.id)) {
-          _selectedGroup = _groups.isNotEmpty ? _groups.first : null;
-        } else if (_selectedGroup != null) {
-          final match = _groups.where((g) => g.id == _selectedGroup!.id);
-          if (match.isNotEmpty) {
-            _selectedGroup = match.first;
-          }
-        }
+      _squadsSubscription?.cancel();
+      _squadsSubscription = FirebaseService().streamGroups(uid: uid).listen((snapshot) {
+        _lastCloudDocs = snapshot.docs;
+        _rebuildGroupsFromDocs();
         notifyListeners();
       }, onError: (e) {
         debugPrint('Firestore squads stream error: $e');
@@ -98,6 +165,16 @@ class GroupsViewModel extends ChangeNotifier {
 
   void syncCurrentUser(UserProfileModel profile) {
     _currentUserProfile = profile;
+
+    // If squad subscriptions were cancelled (e.g. after reset() on an account
+    // switch) and we now have a valid authenticated user, restart them.
+    if (_squadsSubscription == null && profile.id != 'user-default') {
+      initFirebaseSquads();
+      // Fall through — still update the "You" label on any locally-cached squads.
+    } else {
+      _rebuildGroupsFromDocs();
+    }
+
     final userPlayer = PlayerModel(
       id: profile.id,
       name: '${profile.displayName} (You)',
@@ -145,6 +222,7 @@ class GroupsViewModel extends ChangeNotifier {
             rsvp: RSVPStatus.going,
           );
 
+    final currentUid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
     final squadId = FirebaseService().newSquadId();
     final newGroup = GamerGroupModel(
       id: squadId,
@@ -152,6 +230,8 @@ class GroupsViewModel extends ChangeNotifier {
       tagline: tagline,
       iconEmoji: emoji,
       members: [userPlayer],
+      createdBy: currentUid,
+      memberUids: (currentUid != null && currentUid != 'user-default') ? [currentUid] : [],
     );
     _groups.insert(0, newGroup);
     _selectedGroup = newGroup;
@@ -164,15 +244,18 @@ class GroupsViewModel extends ChangeNotifier {
       memberNames: newGroup.members.map((member) => member.name).toList(),
       recentGame: newGroup.recentGame,
       tagline: tagline,
+      uid: currentUid,
     );
   }
 
   /// Join a squad by code or id and update local state
   Future<GamerGroupModel?> joinSquadByCode(String code) async {
-    final myName = _currentUserProfile?.displayName ?? 'You';
+    final myName = _currentUserProfile?.displayName ?? 'Player';
+    final currentUid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
     final data = await FirebaseService().joinSquadByCode(
       code: code,
       playerName: myName,
+      uid: currentUid,
     );
     if (data == null) return null;
 
@@ -186,24 +269,26 @@ class GroupsViewModel extends ChangeNotifier {
       rsvp: RSVPStatus.going,
     )).toList();
 
-    final squad = GamerGroupModel(
-      id: data['id'] as String,
+    final group = GamerGroupModel(
+      id: data['id'] as String? ?? code,
       name: data['name'] ?? 'Squad',
       tagline: data['tagline'] ?? '${members.length} members',
       iconEmoji: data['iconEmoji'] ?? '🎮',
       recentGame: data['recentGame'] ?? 'Valorant',
       members: members,
+      createdBy: data['createdBy'] as String?,
+      memberUids: List<String>.from(data['memberUids'] ?? []),
     );
 
-    final existingIndex = _groups.indexWhere((g) => g.id == squad.id);
+    final existingIndex = _groups.indexWhere((g) => g.id == group.id);
     if (existingIndex != -1) {
-      _groups[existingIndex] = squad;
+      _groups[existingIndex] = group;
     } else {
-      _groups.insert(0, squad);
+      _groups.insert(0, group);
     }
-    _selectedGroup = squad;
+    _selectedGroup = group;
     notifyListeners();
-    return squad;
+    return group;
   }
 
   static const List<Map<String, String>> suggestedGamers = [
@@ -292,5 +377,11 @@ class GroupsViewModel extends ChangeNotifier {
     }
     notifyListeners();
     await FirebaseService().deleteSquad(squadId);
+  }
+
+  @override
+  void dispose() {
+    _squadsSubscription?.cancel();
+    super.dispose();
   }
 }

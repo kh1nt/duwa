@@ -80,4 +80,53 @@ class UserProfileModel {
       lastSteamSync: lastSteamSync ?? this.lastSteamSync,
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'displayName': displayName,
+      'handle': handle,
+      'bio': bio,
+      'avatarInitials': avatarInitials,
+      'avatarEmoji': avatarEmoji,
+      'photoUrl': photoUrl,
+      'favoriteGames': favoriteGames,
+      'gameNightsHosted': gameNightsHosted,
+      'gameNightsPlayed': gameNightsPlayed,
+      'isSteamConnected': isSteamConnected,
+      'steamPersonaName': steamPersonaName,
+      'steamGamesCount': steamGamesCount,
+      'steamFriendCode': steamFriendCode,
+      'steamLevel': steamLevel,
+      'steamStatus': steamStatus,
+      'steamRecentHours': steamRecentHours,
+      'lastSteamSync': lastSteamSync,
+    };
+  }
+
+  factory UserProfileModel.fromMap(Map<String, dynamic> map, [String? docId]) {
+    return UserProfileModel(
+      id: docId ?? map['id'] as String? ?? 'user-default',
+      displayName: map['displayName'] as String? ?? 'Player',
+      handle: map['handle'] as String? ?? '@gamer',
+      bio: map['bio'] as String? ?? 'Ready to squad up · Let\'s play 🎮',
+      avatarInitials: map['avatarInitials'] as String? ?? 'P',
+      avatarEmoji: map['avatarEmoji'] as String? ?? '🎮',
+      photoUrl: map['photoUrl'] as String?,
+      favoriteGames: (map['favoriteGames'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      gameNightsHosted: (map['gameNightsHosted'] as num?)?.toInt() ?? 0,
+      gameNightsPlayed: (map['gameNightsPlayed'] as num?)?.toInt() ?? 0,
+      isSteamConnected: map['isSteamConnected'] as bool? ?? false,
+      steamPersonaName: map['steamPersonaName'] as String?,
+      steamGamesCount: (map['steamGamesCount'] as num?)?.toInt() ?? 0,
+      steamFriendCode: map['steamFriendCode'] as String?,
+      steamLevel: (map['steamLevel'] as num?)?.toInt() ?? 1,
+      steamStatus: map['steamStatus'] as String?,
+      steamRecentHours: (map['steamRecentHours'] as num?)?.toDouble() ?? 0.0,
+      lastSteamSync: map['lastSteamSync'] as String?,
+    );
+  }
 }

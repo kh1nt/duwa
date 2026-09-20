@@ -45,6 +45,7 @@ class _MainShellViewState extends State<MainShellView> {
   void initState() {
     super.initState();
     widget.profileVm.addListener(_onProfileChanged);
+    widget.gameNightVm.addListener(_onSessionsChanged);
     try {
       final user = FirebaseService().currentUser;
       if (user != null) {
@@ -58,18 +59,33 @@ class _MainShellViewState extends State<MainShellView> {
     } catch (e) {
       debugPrint('MainShell init auth sync note: $e');
     }
+    // Initial sync of notifications
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onSessionsChanged();
+    });
   }
 
   void _onProfileChanged() {
     if (!mounted) return;
     widget.gameNightVm.syncCurrentUser(widget.profileVm.profile);
     widget.groupsVm.syncCurrentUser(widget.profileVm.profile);
+    _onSessionsChanged();
+  }
+
+  void _onSessionsChanged() {
+    if (!mounted) return;
+    widget.notificationsVm.syncWithSessions(
+      sessions: widget.gameNightVm.upcomingSessions,
+      currentUserId: widget.profileVm.profile.id,
+      currentUserName: widget.profileVm.profile.displayName,
+    );
   }
 
   @override
   void dispose() {
     _authSubscription?.cancel();
     widget.profileVm.removeListener(_onProfileChanged);
+    widget.gameNightVm.removeListener(_onSessionsChanged);
     super.dispose();
   }
 

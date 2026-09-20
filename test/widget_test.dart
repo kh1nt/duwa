@@ -101,8 +101,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('duwa'), findsOneWidget);
-    expect(find.text('Squad gaming sessions made simple.'), findsOneWidget);
+    expect(find.text('DUWA'), findsOneWidget);
+    expect(find.text('Gaming sessions made simple'), findsOneWidget);
     expect(find.text('Sign In'), findsWidgets);
     expect(find.text('Create Account'), findsWidgets);
   });
@@ -676,17 +676,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verify template strip
-    expect(find.text('1-TAP SQUAD TEMPLATES'), findsOneWidget);
-    expect(find.text('🎯 Friday Ranked'), findsOneWidget);
-    expect(find.text('🍳 Chaos Co-op'), findsOneWidget);
+    // Verify clean timing presets strip (templates removed per simplify request)
+    expect(find.text('QUICK TIMING'), findsOneWidget);
+    expect(find.text('Tonight · 8:00 PM'), findsOneWidget);
+    expect(find.text('Tomorrow · 8:00 PM'), findsOneWidget);
 
-    // Tap Friday Ranked template
-    await tester.tap(find.text('🎯 Friday Ranked'));
+    // Tap Tonight preset
+    await tester.tap(find.text('Tonight · 8:00 PM'));
     await tester.pumpAndSettle();
 
-    expect(gameNightVm.draftTitle, 'Friday Ranked Valorant');
-    expect(gameNightVm.draftLocation, 'Discord Voice #1');
+    expect(gameNightVm.draftTimeDisplay, '8:00 PM');
   });
 
   test('GameNightViewModel markSessionCompleted locks session from mutations', () {
