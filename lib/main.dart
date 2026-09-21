@@ -13,6 +13,7 @@ import 'viewmodels/theme_viewmodel.dart';
 import 'views/auth/auth_view.dart';
 import 'views/common/duwa_loading_screen.dart';
 import 'views/main_shell_view.dart';
+import 'views/splash/duwa_splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,11 +31,13 @@ void main() async {
 class DuwaApp extends StatefulWidget {
   final Widget? home;
   final bool skipAuth;
+  final bool skipSplash;
 
   const DuwaApp({
     super.key,
     this.home,
     this.skipAuth = false,
+    this.skipSplash = false,
   });
 
   @override
@@ -49,10 +52,12 @@ class _DuwaAppState extends State<DuwaApp> {
   late final ProfileViewModel _profileVm;
   StreamSubscription<User?>? _authSubscription;
   String? _lastAuthUid;
+  late bool _splashComplete;
 
   @override
   void initState() {
     super.initState();
+    _splashComplete = widget.skipSplash || widget.skipAuth || widget.home != null;
     _themeVm = ThemeViewModel();
     _gameNightVm = GameNightViewModel();
     _groupsVm = GroupsViewModel();
@@ -114,41 +119,52 @@ class _DuwaAppState extends State<DuwaApp> {
           debugShowCheckedModeBanner: false,
           theme: _themeVm.materialTheme,
           home: widget.home ??
-              (widget.skipAuth
-                  ? MainShellView(
-                      themeVm: _themeVm,
-                      gameNightVm: _gameNightVm,
-                      groupsVm: _groupsVm,
-                      notificationsVm: _notificationsVm,
-                      profileVm: _profileVm,
+              (!_splashComplete
+                  ? DuwaSplashScreen(
+                      duwaTheme: _themeVm.themeData,
+                      onComplete: () {
+                        if (mounted) {
+                          setState(() {
+                            _splashComplete = true;
+                          });
+                        }
+                      },
                     )
-                  : StreamBuilder<User?>(
-                      stream: FirebaseService().authStateChanges,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return DuwaLoadingScreen(duwaTheme: _themeVm.themeData);
-                        }
-                        final user = snapshot.data;
-                        if (user == null) {
-                          return AuthView(
-                            themeVm: _themeVm,
-                            profileVm: _profileVm,
-                            gameNightVm: _gameNightVm,
-                            onAuthenticated: () {
-                              setState(() {});
-                            },
-                          );
-                        }
-
-                        return MainShellView(
+                  : (widget.skipAuth
+                      ? MainShellView(
                           themeVm: _themeVm,
                           gameNightVm: _gameNightVm,
                           groupsVm: _groupsVm,
                           notificationsVm: _notificationsVm,
                           profileVm: _profileVm,
-                        );
-                      },
-                    )),
+                        )
+                      : StreamBuilder<User?>(
+                          stream: FirebaseService().authStateChanges,
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return DuwaLoadingScreen(duwaTheme: _themeVm.themeData);
+                            }
+                            final user = snapshot.data;
+                            if (user == null) {
+                              return AuthView(
+                                themeVm: _themeVm,
+                                profileVm: _profileVm,
+                                gameNightVm: _gameNightVm,
+                                onAuthenticated: () {
+                                  setState(() {});
+                                },
+                              );
+                            }
+
+                            return MainShellView(
+                              themeVm: _themeVm,
+                              gameNightVm: _gameNightVm,
+                              groupsVm: _groupsVm,
+                              notificationsVm: _notificationsVm,
+                              profileVm: _profileVm,
+                            );
+                          },
+                        ))),
         );
       },
     );

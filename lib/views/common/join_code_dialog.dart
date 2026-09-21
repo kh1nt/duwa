@@ -49,15 +49,12 @@ class _JoinCodeDialogState extends State<JoinCodeDialog> {
   Future<void> _handleJoin() async {
     final rawCode = _codeController.text.trim();
     if (rawCode.isEmpty) {
-      setState(() => _errorMessage = 'Please enter a room code');
+      setState(() => _errorMessage = 'Please enter a code');
       return;
     }
 
-    // Auto prepend DUWA- if user only typed the 4-char suffix
-    String formattedCode = rawCode.toUpperCase();
-    if (!formattedCode.startsWith('DUWA-')) {
-      formattedCode = 'DUWA-$formattedCode';
-    }
+    final upper = rawCode.toUpperCase();
+    final isSquad = upper.startsWith('SQ-');
 
     setState(() {
       _isLoading = true;
@@ -65,9 +62,28 @@ class _JoinCodeDialogState extends State<JoinCodeDialog> {
     });
 
     final playerName = FirebaseService().currentUser?.displayName ?? 'Gamer';
+    final currentUid = FirebaseService().currentUser?.uid;
+
+    if (isSquad) {
+      final squadResult = await FirebaseService().joinSquadByCode(
+        code: upper,
+        playerName: playerName,
+        uid: currentUid,
+      );
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (squadResult != null) {
+        Navigator.pop(context);
+        widget.onJoined({'type': 'squad', ...squadResult});
+        return;
+      }
+    }
+
+    // Try session join with original code (supports DUWA-XXXX, DW-XXXX, or raw 4-char suffix)
     final result = await FirebaseService().joinGameNightByCode(
-      roomCode: formattedCode,
+      roomCode: upper,
       playerName: playerName,
+      uid: currentUid,
     );
 
     if (!mounted) return;
@@ -77,8 +93,22 @@ class _JoinCodeDialogState extends State<JoinCodeDialog> {
       Navigator.pop(context);
       widget.onJoined(result);
     } else {
+      // If not marked with SQ- prefix, also try squad join as fallback
+      if (!isSquad) {
+        final squadFallback = await FirebaseService().joinSquadByCode(
+          code: upper,
+          playerName: playerName,
+          uid: currentUid,
+        );
+        if (squadFallback != null) {
+          if (!mounted) return;
+          Navigator.pop(context);
+          widget.onJoined({'type': 'squad', ...squadFallback});
+          return;
+        }
+      }
       setState(() {
-        _errorMessage = 'Lobby not found! Check code with your host 🎮';
+        _errorMessage = 'Lobby or squad not found! Check code with your host 🎮';
       });
     }
   }
@@ -131,7 +161,7 @@ class _JoinCodeDialogState extends State<JoinCodeDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Join with Room Code',
+                        'Join with Code',
                         style: TextStyle(
                           color: t.textPrimary,
                           fontSize: 18,
@@ -140,7 +170,7 @@ class _JoinCodeDialogState extends State<JoinCodeDialog> {
                         ),
                       ),
                       Text(
-                        'Enter the 6-character squad code',
+                        'Enter a session or squad code',
                         style: TextStyle(
                           color: t.textSecondary,
                           fontSize: 12,
@@ -180,14 +210,14 @@ class _JoinCodeDialogState extends State<JoinCodeDialog> {
                   letterSpacing: 4,
                 ),
                 inputFormatters: [
-                  LengthLimitingTextInputFormatter(9),
+                  LengthLimitingTextInputFormatter(16),
                 ],
                 decoration: InputDecoration(
-                  hintText: 'DUWA-XXXX',
+                  hintText: 'DUWA-XXXX or SQ-XXXX',
                   hintStyle: TextStyle(
                     color: t.textMuted.withAlpha(120),
-                    letterSpacing: 3,
-                    fontSize: 18,
+                    letterSpacing: 2,
+                    fontSize: 16,
                   ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),

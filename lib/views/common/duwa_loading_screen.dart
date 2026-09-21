@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../core/theme/duwa_colors.dart';
 import '../../core/theme/duwa_theme.dart';
 import 'duwa_logo.dart';
 
@@ -97,8 +98,8 @@ class _DuwaLoadingScreenState extends State<DuwaLoadingScreen>
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          const Color(0xFF38BDF8).withValues(alpha: opacity * 0.45),
-                          const Color(0xFF818CF8).withValues(alpha: opacity * 0.25),
+                          DuwaColors.solarFlame.withValues(alpha: opacity * 0.45),
+                          DuwaColors.emberGold.withValues(alpha: opacity * 0.25),
                           Colors.transparent,
                         ],
                         stops: const [0.0, 0.5, 1.0],
@@ -168,12 +169,12 @@ class _DuwaLoadingScreenState extends State<DuwaLoadingScreen>
                           ),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF0284C7), Color(0xFF6366F1)],
+                              colors: [Color(0xFFFF5E1E), Color(0xFFFFA114)],
                             ),
                             borderRadius: BorderRadius.circular(6),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0284C7).withValues(alpha: 0.4),
+                                color: DuwaColors.solarFlame.withValues(alpha: 0.4),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -224,7 +225,7 @@ class _DuwaLoadingScreenState extends State<DuwaLoadingScreen>
                             : const Color(0xFFCBD5E1),
                         child: Shimmer.fromColors(
                           baseColor: Colors.transparent,
-                          highlightColor: const Color(0xFF38BDF8),
+                          highlightColor: const Color(0xFFFFA114),
                           period: const Duration(milliseconds: 1400),
                           child: Container(
                             width: 160,
@@ -232,9 +233,9 @@ class _DuwaLoadingScreenState extends State<DuwaLoadingScreen>
                             decoration: const BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
-                                  Color(0xFF38BDF8),
-                                  Color(0xFF818CF8),
-                                  Color(0xFFC084FC),
+                                  Color(0xFFFF5E1E),
+                                  Color(0xFFFFA114),
+                                  Color(0xFFFFD280),
                                 ],
                               ),
                             ),

@@ -126,3 +126,10 @@
   - **Dual Rendering Pipeline**: Features both the high-res squircle asset (`assets/images/duwa_gamepad_logo.jpg`) and a precision resolution-independent vector painter (`_DuwaGamepadLogoPainter`) for razor-sharp rendering on any screen.
 - [x] **Comprehensive Test Suite & Code Health**:
   - Added `test/steam_service_test.dart` (9 unit tests); entire test suite (78 tests) passing cleanly with 0 `flutter analyze` issues.
+- [x] **SSO Platform Hardening, Modern Gmail Logo, Short Squad Codes & Real User Integrity**:
+  - **SSO Cross-Platform Fix**: Configured `serverClientId` for GoogleSignIn on mobile; added desktop fallback using `_auth.signInWithProvider(GoogleAuthProvider())` on Windows/macOS/Linux; improved error handling.
+  - **Modern 4-Color Gmail Logo**: Built `GmailLogoWidget` vector painter with authentic Google Workspace geometry (Blue `#4285F4`, Red `#EA4335`, Yellow `#FBBC05`, Green `#34A853`) and embedded it into `AuthView`.
+  - **Arcade Short Squad Codes**: Added `generateSquadCode()` generating clean 4-character codes (e.g. `SQ-79K2`); added `squadCode` and `displaySquadCode` to `GamerGroupModel`; updated squad details, invite sheets, and WhatsApp/Discord exports.
+  - **Eliminated Fake/Unreal Users**: Purged the hardcoded `suggestedGamers` dummy list; added real Firestore user lookup (`searchRegisteredUsers`); prompted organizers to share their squad code if no registered user exists instead of generating phantom accounts.
+  - **Code & Join Discrepancies**: Unified `JoinCodeDialog` to accept both squad codes (`SQ-...`) and game night codes (`DUWA-...`, `DW-...`, or 4-char suffix) without mangling prefixes; fixed layout overflow in dispatch sheet.
+  - **Testing**: Added `test/sso_squad_code_test.dart` (6 unit/widget tests); all 84 tests passing cleanly with 0 `flutter analyze` issues.

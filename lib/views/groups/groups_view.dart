@@ -6,6 +6,7 @@ import '../../models/game_night_model.dart';
 import '../../models/group_model.dart';
 import '../../viewmodels/game_night_viewmodel.dart';
 import '../../viewmodels/groups_viewmodel.dart';
+import '../../services/firebase_service.dart';
 import '../common/duwa_buttons.dart';
 import '../common/bouncy_tap.dart';
 
@@ -487,7 +488,7 @@ class GroupsView extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Invite code: SQ-${g.id.toUpperCase().replaceAll('-', '')}',
+                            'Invite code: ${g.displaySquadCode}',
                             style: TextStyle(
                               color: duwaTheme.textPrimary,
                               fontSize: 12,
@@ -498,10 +499,10 @@ class GroupsView extends StatelessWidget {
                         InkWell(
                           onTap: () {
                             Clipboard.setData(
-                              ClipboardData(text: 'SQ-${g.id.toUpperCase().replaceAll('-', '')}'),
+                              ClipboardData(text: g.displaySquadCode),
                             );
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Squad invite code copied!')),
+                              SnackBar(content: Text('Squad invite code ${g.displaySquadCode} copied!')),
                             );
                           },
                           child: Text(
@@ -666,8 +667,8 @@ class GroupsView extends StatelessWidget {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final squad = groupsVm.groups.firstWhere((x) => x.id == initialGroup.id, orElse: () => initialGroup);
-            final inviteCode = 'SQ-${squad.id.toUpperCase().replaceAll('-', '')}';
-            final inviteLink = 'https://duwa.app/squad/${squad.id}';
+            final inviteCode = squad.displaySquadCode;
+            final inviteLink = 'https://duwa.app/squad/${squad.displaySquadCode}';
             final crewNames = squad.members.map((m) => m.name.replaceAll(' (You)', '')).join(', ');
 
             return Padding(
@@ -763,17 +764,41 @@ class GroupsView extends StatelessWidget {
                               ),
                             ),
                             onSubmitted: (val) async {
-                              final name = val.trim();
-                              if (name.isNotEmpty) {
-                                final added = await groupsVm.addMemberToSquad(squadId: squad.id, memberName: name);
+                              final query = val.trim();
+                              if (query.isEmpty) return;
+                              final realUsers = await FirebaseService().searchRegisteredUsers(query);
+                              if (realUsers.isNotEmpty) {
+                                final user = realUsers.first;
+                                final realName = user['displayName'] as String? ?? query;
+                                final added = await groupsVm.addMemberToSquad(
+                                  squadId: squad.id,
+                                  memberName: realName,
+                                  userId: user['uid'] as String?,
+                                  username: user['handle'] as String?,
+                                  avatarEmoji: user['avatarEmoji'] as String?,
+                                );
                                 if (added) {
                                   controller.clear();
                                   setSheetState(() {});
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Added $name to ${squad.name}!')),
+                                      SnackBar(content: Text('Added $realName to ${squad.name}! 🎮')),
                                     );
                                   }
+                                } else {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('$realName is already in ${squad.name}')),
+                                    );
+                                  }
+                                }
+                              } else {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('No registered player found with "$query". Share your code $inviteCode to invite them!'),
+                                    ),
+                                  );
                                 }
                               }
                             },
@@ -782,23 +807,41 @@ class GroupsView extends StatelessWidget {
                         const SizedBox(width: 8),
                         BouncyTap(
                           onTap: () async {
-                            final name = controller.text.trim();
-                            if (name.isNotEmpty) {
-                              final added = await groupsVm.addMemberToSquad(squadId: squad.id, memberName: name);
+                            final query = controller.text.trim();
+                            if (query.isEmpty) return;
+                            final realUsers = await FirebaseService().searchRegisteredUsers(query);
+                            if (realUsers.isNotEmpty) {
+                              final user = realUsers.first;
+                              final realName = user['displayName'] as String? ?? query;
+                              final added = await groupsVm.addMemberToSquad(
+                                squadId: squad.id,
+                                memberName: realName,
+                                userId: user['uid'] as String?,
+                                username: user['handle'] as String?,
+                                avatarEmoji: user['avatarEmoji'] as String?,
+                              );
                               if (added) {
                                 controller.clear();
                                 setSheetState(() {});
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Added $name to ${squad.name}!')),
+                                    SnackBar(content: Text('Added $realName to ${squad.name}! 🎮')),
                                   );
                                 }
                               } else {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('$name is already in ${squad.name}')),
+                                    SnackBar(content: Text('$realName is already in ${squad.name}')),
                                   );
                                 }
+                              }
+                            } else {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('No registered player found with "$query". Share code $inviteCode to invite them!'),
+                                  ),
+                                );
                               }
                             }
                           },
@@ -820,79 +863,7 @@ class GroupsView extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-
-                    // Quick-add suggestions
-                    Text(
-                      'SUGGESTED GAMERS',
-                      style: TextStyle(
-                        color: duwaTheme.textSecondary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: GroupsViewModel.suggestedGamers.map((s) {
-                        final alreadyIn = squad.members.any((m) => m.name.toLowerCase() == s['name']!.toLowerCase());
-                        return InkWell(
-                          onTap: alreadyIn
-                              ? null
-                              : () async {
-                                  final added = await groupsVm.addMemberToSquad(
-                                    squadId: squad.id,
-                                    memberName: s['name']!,
-                                    username: s['tag'],
-                                    avatarEmoji: s['emoji'],
-                                  );
-                                  if (added) {
-                                    setSheetState(() {});
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Added ${s['name']} to ${squad.name}!')),
-                                      );
-                                    }
-                                  }
-                                },
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: alreadyIn ? duwaTheme.surfaceHighest.withAlpha(80) : duwaTheme.surfaceLight,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: alreadyIn ? Colors.transparent : duwaTheme.cardBorder,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(s['emoji'] ?? '🎮', style: const TextStyle(fontSize: 12)),
-                                const SizedBox(width: 5),
-                                Text(
-                                  s['name']!,
-                                  style: TextStyle(
-                                    color: alreadyIn ? duwaTheme.textMuted : duwaTheme.textPrimary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Icon(
-                                  alreadyIn ? Icons.check : Icons.add,
-                                  size: 13,
-                                  color: alreadyIn ? duwaTheme.textMuted : duwaTheme.primaryAccent,
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 18),
 
                     // SECTION 2: SOCIAL SHARE DISPATCH
                     Text(

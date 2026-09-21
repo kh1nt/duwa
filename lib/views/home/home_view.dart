@@ -684,6 +684,13 @@ class HomeView extends StatelessWidget {
       context,
       duwaTheme: t,
       onJoined: (data) async {
+        if (data['type'] == 'squad') {
+          final squadName = data['name'] ?? 'Squad';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Joined squad $squadName! 👥')),
+          );
+          return;
+        }
         final title = data['title'] ?? 'Session';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Joined $title! 🎮')),

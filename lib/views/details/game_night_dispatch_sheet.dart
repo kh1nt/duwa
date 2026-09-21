@@ -462,12 +462,16 @@ class _GameNightDispatchSheetState extends State<GameNightDispatchSheet> {
                               children: [
                                 const Icon(Icons.key_rounded, color: Color(0xFFFFA114), size: 15),
                                 const SizedBox(width: 6),
-                                Text(
-                                  'Room #${s.displayRoomCode}',
-                                  style: const TextStyle(
-                                    color: textPrimaryCol,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12.5,
+                                Flexible(
+                                  child: Text(
+                                    '#${s.displayRoomCode}',
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      color: textPrimaryCol,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ),
                               ],

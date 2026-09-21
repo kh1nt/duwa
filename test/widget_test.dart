@@ -630,7 +630,6 @@ void main() {
 
     // Verify Invite Sheet rendered with both direct-add and social share options
     expect(find.text('ADD SQUAD MEMBER'), findsOneWidget);
-    expect(find.text('SUGGESTED GAMERS'), findsOneWidget);
     expect(find.text('SHARE SQUAD INVITE'), findsOneWidget);
     expect(find.text('WhatsApp'), findsOneWidget);
     expect(find.text('Discord'), findsOneWidget);

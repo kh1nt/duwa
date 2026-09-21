@@ -160,7 +160,7 @@ class GameNightModel {
 
   String get displayRoomCode => (roomCode != null && roomCode!.isNotEmpty)
       ? roomCode!
-      : 'DW-${id.length >= 4 ? id.substring(0, 4).toUpperCase() : id.toUpperCase()}';
+      : 'DUWA-${id.length >= 4 ? id.substring(0, 4).toUpperCase() : id.toUpperCase()}';
 
   String get organizerDisplay => organizerName ?? (isHost ? 'You' : (players.isNotEmpty ? players.first.name : 'Squad'));
 

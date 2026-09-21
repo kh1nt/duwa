@@ -70,6 +70,7 @@ class GamerGroupModel {
   final String recentGame;
   final String? createdBy;
   final List<String> memberUids;
+  final String? squadCode;
 
   const GamerGroupModel({
     required this.id,
@@ -81,9 +82,14 @@ class GamerGroupModel {
     this.recentGame = 'Valorant',
     this.createdBy,
     this.memberUids = const [],
+    this.squadCode,
   });
 
   int get memberCount => members.length;
+
+  String get displaySquadCode => (squadCode != null && squadCode!.isNotEmpty)
+      ? squadCode!
+      : 'SQ-${id.length >= 4 ? id.substring(0, 4).toUpperCase() : id.toUpperCase()}';
 
   GamerGroupModel copyWith({
     String? id,
@@ -95,6 +101,7 @@ class GamerGroupModel {
     String? recentGame,
     String? createdBy,
     List<String>? memberUids,
+    String? squadCode,
   }) {
     return GamerGroupModel(
       id: id ?? this.id,
@@ -106,6 +113,7 @@ class GamerGroupModel {
       recentGame: recentGame ?? this.recentGame,
       createdBy: createdBy ?? this.createdBy,
       memberUids: memberUids ?? this.memberUids,
+      squadCode: squadCode ?? this.squadCode,
     );
   }
 

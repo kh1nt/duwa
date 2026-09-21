@@ -113,6 +113,7 @@ class GroupsViewModel extends ChangeNotifier {
         members: members,
         createdBy: data['createdBy'] as String?,
         memberUids: List<String>.from(data['memberUids'] ?? []),
+        squadCode: data['squadCode'] as String?,
       );
     }).toList();
 
@@ -224,6 +225,7 @@ class GroupsViewModel extends ChangeNotifier {
 
     final currentUid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
     final squadId = FirebaseService().newSquadId();
+    final squadCode = FirebaseService().generateSquadCode();
     final newGroup = GamerGroupModel(
       id: squadId,
       name: name,
@@ -232,6 +234,7 @@ class GroupsViewModel extends ChangeNotifier {
       members: [userPlayer],
       createdBy: currentUid,
       memberUids: (currentUid != null && currentUid != 'user-default') ? [currentUid] : [],
+      squadCode: squadCode,
     );
     _groups.insert(0, newGroup);
     _selectedGroup = newGroup;
@@ -245,6 +248,7 @@ class GroupsViewModel extends ChangeNotifier {
       recentGame: newGroup.recentGame,
       tagline: tagline,
       uid: currentUid,
+      squadCode: squadCode,
     );
   }
 
@@ -278,6 +282,7 @@ class GroupsViewModel extends ChangeNotifier {
       members: members,
       createdBy: data['createdBy'] as String?,
       memberUids: List<String>.from(data['memberUids'] ?? []),
+      squadCode: data['squadCode'] as String?,
     );
 
     final existingIndex = _groups.indexWhere((g) => g.id == group.id);
@@ -291,18 +296,10 @@ class GroupsViewModel extends ChangeNotifier {
     return group;
   }
 
-  static const List<Map<String, String>> suggestedGamers = [
-    {'name': 'Alex', 'tag': '@alex_k', 'emoji': '⚡'},
-    {'name': 'Jordan', 'tag': '@jordan_m', 'emoji': '🔥'},
-    {'name': 'Sam', 'tag': '@sam_t', 'emoji': '🎯'},
-    {'name': 'Taylor', 'tag': '@taylor_r', 'emoji': '🎲'},
-    {'name': 'Morgan', 'tag': '@morgan_x', 'emoji': '🦊'},
-    {'name': 'Chris', 'tag': '@chris_gg', 'emoji': '👾'},
-  ];
-
   Future<bool> addMemberToSquad({
     required String squadId,
     required String memberName,
+    String? userId,
     String? username,
     String? avatarEmoji,
   }) async {
@@ -313,12 +310,14 @@ class GroupsViewModel extends ChangeNotifier {
     if (groupIndex == -1) return false;
 
     final targetGroup = _groups[groupIndex];
-    if (targetGroup.members.any((m) => m.name.toLowerCase() == trimmedName.toLowerCase())) {
+    if (targetGroup.members.any((m) =>
+        m.name.toLowerCase() == trimmedName.toLowerCase() ||
+        (userId != null && m.id == userId))) {
       return false;
     }
 
     final newMember = PlayerModel(
-      id: 'p-${DateTime.now().millisecondsSinceEpoch}',
+      id: userId ?? 'p-${DateTime.now().millisecondsSinceEpoch}',
       name: trimmedName,
       username: username ?? '@${trimmedName.toLowerCase().replaceAll(' ', '_')}',
       avatarInitials: trimmedName.isNotEmpty ? trimmedName.substring(0, 1).toUpperCase() : 'P',
@@ -328,8 +327,14 @@ class GroupsViewModel extends ChangeNotifier {
     );
 
     final updatedMembers = [...targetGroup.members, newMember];
+    final updatedUids = List<String>.from(targetGroup.memberUids);
+    if (userId != null && !updatedUids.contains(userId)) {
+      updatedUids.add(userId);
+    }
+
     final updatedGroup = targetGroup.copyWith(
       members: updatedMembers,
+      memberUids: updatedUids,
       tagline: '${updatedMembers.length} members',
     );
 

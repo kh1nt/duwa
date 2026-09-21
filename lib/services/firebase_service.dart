@@ -105,9 +105,14 @@ class FirebaseService {
     return credential;
   }
 
-  /// Sign in with Google / Gmail (Native Account Chooser on mobile, OAuth popup on web)
+  /// Sign in with Google / Gmail (Native Account Chooser on mobile, OAuth popup on web, provider on desktop)
   Future<UserCredential?> signInWithGoogle() async {
     try {
+      final isDesktop = !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.macOS ||
+              defaultTargetPlatform == TargetPlatform.linux);
+
       if (kIsWeb) {
         final GoogleAuthProvider googleProvider = GoogleAuthProvider();
         googleProvider.addScope('email');
@@ -127,8 +132,29 @@ class FirebaseService {
         return credential;
       }
 
+      if (isDesktop) {
+        final GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        googleProvider.addScope('email');
+        googleProvider.addScope('profile');
+        googleProvider.setCustomParameters({'prompt': 'select_account'});
+        final credential = await _auth.signInWithProvider(googleProvider);
+        if (credential.user != null) {
+          final user = credential.user!;
+          final displayName =
+              user.displayName ?? (user.email?.split('@').first ?? 'Player');
+          await saveUserProfile(
+            uid: user.uid,
+            displayName: displayName,
+            avatarEmoji: '⚡',
+          );
+        }
+        return credential;
+      }
+
       // Mobile (Android / iOS)
       final GoogleSignIn googleSignIn = GoogleSignIn(
+        serverClientId:
+            '334046732760-m378ogsgeqa8j2202hgrpv4a3q5bv388.apps.googleusercontent.com',
         scopes: ['email', 'profile'],
       );
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
@@ -220,6 +246,29 @@ class FirebaseService {
         'Firestore getUserProfile note (offline or permission check): $e',
       );
       return null;
+    }
+  }
+
+  /// Look up real registered users in Firestore by handle or displayName
+  Future<List<Map<String, dynamic>>> searchRegisteredUsers(String query) async {
+    final cleanQuery = query.trim().replaceAll('@', '').toLowerCase();
+    if (cleanQuery.isEmpty) return [];
+
+    try {
+      final snapshot = await _usersCol.limit(30).get().timeout(const Duration(seconds: 4));
+      final results = <Map<String, dynamic>>[];
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final displayName = (data['displayName'] as String? ?? '').toLowerCase();
+        final handle = (data['handle'] as String? ?? '').replaceAll('@', '').toLowerCase();
+        if (displayName.contains(cleanQuery) || handle.contains(cleanQuery)) {
+          results.add({'uid': doc.id, ...data});
+        }
+      }
+      return results;
+    } catch (e) {
+      debugPrint('Error searching registered users: $e');
+      return [];
     }
   }
 
@@ -411,21 +460,31 @@ class FirebaseService {
     }
   }
 
-  /// Join an active squad session by its 6-character room code
+  /// Join an active squad session by room code (supports DUWA-XXXX, DW-XXXX, or 4-char suffix)
   Future<Map<String, dynamic>?> joinGameNightByCode({
     required String roomCode,
     required String playerName,
     String? uid,
   }) async {
     try {
-      final formattedCode = roomCode.toUpperCase().trim();
-      final query =
-          await _gameNightsCol
-              .where('roomCode', isEqualTo: formattedCode)
-              .limit(1)
-              .get();
+      final formatted = roomCode.toUpperCase().trim();
+      final withoutPrefix = formatted.startsWith('DUWA-')
+          ? formatted.substring(5)
+          : (formatted.startsWith('DW-') ? formatted.substring(3) : formatted);
+      final duwaVariant = 'DUWA-$withoutPrefix';
+      final dwVariant = 'DW-$withoutPrefix';
 
-      if (query.docs.isEmpty) return null;
+      final query = await _gameNightsCol
+          .where('roomCode', whereIn: [formatted, duwaVariant, dwVariant, withoutPrefix])
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) {
+        // Check by document ID as fallback
+        final directDoc = await _gameNightsCol.doc(roomCode.trim().toLowerCase()).get();
+        if (!directDoc.exists) return null;
+        return {'id': directDoc.id, ...directDoc.data()!};
+      }
 
       final doc = query.docs.first;
       final data = doc.data();
@@ -575,6 +634,15 @@ class FirebaseService {
     }
   }
 
+  /// Generate a concise arcade-style 6-character squad code (e.g. SQ-79K2)
+  String generateSquadCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final random = math.Random();
+    final code =
+        List.generate(4, (index) => chars[random.nextInt(chars.length)]).join();
+    return 'SQ-$code';
+  }
+
   /// Save squad to Firestore
   Future<String?> createSquad({
     String? id,
@@ -584,11 +652,12 @@ class FirebaseService {
     required String recentGame,
     String? tagline,
     String? uid,
+    String? squadCode,
   }) async {
     try {
       final docRef =
           id != null && id.isNotEmpty ? _groupsCol.doc(id) : _groupsCol.doc();
-      final squadCode = 'SQ-${docRef.id.toUpperCase().replaceAll('-', '')}';
+      final code = squadCode ?? generateSquadCode();
       final creatorUid = uid ?? currentUser?.uid;
       final memberUids = <String>[];
       if (creatorUid != null && creatorUid.isNotEmpty && creatorUid != 'guest') {
@@ -606,7 +675,7 @@ class FirebaseService {
         'memberUids': memberUids,
         'recentGame': recentGame,
         'tagline': tagline ?? '${cleanMemberNames.length} members',
-        'squadCode': squadCode,
+        'squadCode': code,
         'createdBy': creatorUid ?? 'guest',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -617,7 +686,7 @@ class FirebaseService {
     }
   }
 
-  /// Join a squad by squad code or ID
+  /// Join a squad by squad code (SQ-XXXX or XXXX) or document ID
   Future<Map<String, dynamic>?> joinSquadByCode({
     required String code,
     required String playerName,
@@ -626,11 +695,15 @@ class FirebaseService {
     try {
       final formatted = code.trim();
       final upperFormatted = formatted.toUpperCase();
+      final withoutPrefix = upperFormatted.startsWith('SQ-')
+          ? upperFormatted.substring(3)
+          : upperFormatted;
+      final withPrefix = 'SQ-$withoutPrefix';
 
-      // Search by squadCode or document id
+      // Search by squadCode variations
       QuerySnapshot<Map<String, dynamic>> query =
           await _groupsCol
-              .where('squadCode', isEqualTo: upperFormatted)
+              .where('squadCode', whereIn: [upperFormatted, withPrefix, withoutPrefix])
               .limit(1)
               .get();
 
@@ -642,6 +715,11 @@ class FirebaseService {
         final directDoc = await _groupsCol.doc(formatted.toLowerCase()).get();
         if (directDoc.exists) {
           targetDoc = directDoc;
+        } else {
+          final directUpper = await _groupsCol.doc(upperFormatted).get();
+          if (directUpper.exists) {
+            targetDoc = directUpper;
+          }
         }
       }
 

@@ -10,6 +10,7 @@ import '../../viewmodels/theme_viewmodel.dart';
 import '../common/bouncy_tap.dart';
 import '../common/duwa_buttons.dart';
 import '../common/duwa_logo.dart';
+import '../common/gmail_logo.dart';
 
 enum AuthMode { signIn, signUp }
 
@@ -228,17 +229,19 @@ class _AuthViewState extends State<AuthView> {
     } on FirebaseAuthException catch (e) {
       if (e.code == 'operation-not-allowed') {
         _showError('Google sign-in is not enabled in Firebase Console.');
-      } else if (e.code == 'popup-closed-by-user') {
-        // User closed popup; do not display error
+      } else if (e.code == 'popup-closed-by-user' || e.code == 'canceled') {
+        // User closed popup or canceled; do not display error
+      } else if (e.code == 'network-request-failed') {
+        _showError('Network error during Google sign-in. Check your connection.');
       } else {
-        _showError(e.message ?? 'Google sign-in failed.');
+        _showError(e.message ?? 'Google sign-in failed (${e.code}).');
       }
     } catch (e) {
       final msg = e.toString();
       if (!msg.contains('popup_closed') &&
           !msg.contains('canceled') &&
           !msg.contains('cancelled')) {
-        _showError('Google sign-in could not be completed. Please try again.');
+        _showError('Google sign-in could not be completed. Please check your connection or browser.');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -259,25 +262,17 @@ class _AuthViewState extends State<AuthView> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 24,
-              height: 24,
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withAlpha(25), blurRadius: 3),
+                  BoxShadow(color: Colors.black.withAlpha(30), blurRadius: 4, offset: const Offset(0, 1)),
                 ],
               ),
-              child: const Center(
-                child: Text(
-                  'G',
-                  style: TextStyle(
-                    color: Color(0xFFEA4335),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
+              child: const GmailLogoWidget(size: 16),
             ),
             const SizedBox(width: 10),
             Text(
