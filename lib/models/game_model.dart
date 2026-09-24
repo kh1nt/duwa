@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/cloudinary_service.dart';
 
 class GameModel {
   final String id;
@@ -21,6 +22,7 @@ class GameModel {
   final String coopType;
   final String? imageUrl;
   final bool isInstalled;
+  final String? createdBy;
 
   const GameModel({
     required this.id,
@@ -43,6 +45,7 @@ class GameModel {
     this.coopType = 'Online Co-op',
     this.imageUrl,
     this.isInstalled = false,
+    this.createdBy,
   });
 
   GameModel copyWith({
@@ -66,6 +69,7 @@ class GameModel {
     String? coopType,
     String? imageUrl,
     bool? isInstalled,
+    String? createdBy,
   }) {
     return GameModel(
       id: id ?? this.id,
@@ -88,6 +92,7 @@ class GameModel {
       coopType: coopType ?? this.coopType,
       imageUrl: imageUrl ?? this.imageUrl,
       isInstalled: isInstalled ?? this.isInstalled,
+      createdBy: createdBy ?? this.createdBy,
     );
   }
 
@@ -102,6 +107,16 @@ class GameModel {
       return 'https://cdn.cloudflare.steamstatic.com/steam/apps/$steamAppId/header.jpg';
     }
     return null;
+  }
+
+  /// Returns an optimized cover URL with Cloudinary transformations if applicable
+  String? optimizedCoverUrl({int? width, int? height, String crop = 'fill'}) {
+    final raw = displayCoverUrl;
+    if (raw == null) return null;
+    if (raw.contains('res.cloudinary.com')) {
+      return CloudinaryService().getOptimizedUrl(raw, width: width, height: height, crop: crop);
+    }
+    return raw;
   }
 
   Map<String, dynamic> toMap() {
@@ -125,6 +140,7 @@ class GameModel {
       'coopType': coopType,
       'imageUrl': imageUrl,
       'isInstalled': isInstalled,
+      if (createdBy != null) 'createdBy': createdBy,
     };
   }
 
@@ -150,6 +166,7 @@ class GameModel {
       coopType: map['coopType'] as String? ?? 'Online Co-op',
       imageUrl: map['imageUrl'] as String?,
       isInstalled: map['isInstalled'] as bool? ?? false,
+      createdBy: map['createdBy'] as String?,
     );
   }
 

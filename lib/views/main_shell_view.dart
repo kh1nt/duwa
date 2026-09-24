@@ -187,6 +187,8 @@ class _MainShellViewState extends State<MainShellView> {
         profileVm: widget.profileVm,
         themeVm: widget.themeVm,
         gameNightVm: widget.gameNightVm,
+        groupsVm: widget.groupsVm,
+        onPlanWithGame: (GameModel? game) => _openCreateSheet(initialGame: game),
       ),
     ];
 

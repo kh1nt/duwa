@@ -68,11 +68,81 @@ class _AddGameSheetState extends State<AddGameSheet> {
     super.dispose();
   }
 
-  Future<void> _pickAndUploadCover() async {
+  Future<void> _showImageSourcePicker() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: widget.duwaTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Game Box Art / Photo',
+                style: TextStyle(
+                  color: widget.duwaTheme.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: widget.duwaTheme.primaryAccent.withAlpha(30),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.camera_alt_rounded, color: widget.duwaTheme.primaryAccent),
+                ),
+                title: Text(
+                  'Take Photo with Camera',
+                  style: TextStyle(
+                    color: widget.duwaTheme.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: widget.duwaTheme.primaryAccent.withAlpha(30),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.photo_library_rounded, color: widget.duwaTheme.primaryAccent),
+                ),
+                title: Text(
+                  'Choose from Gallery',
+                  style: TextStyle(
+                    color: widget.duwaTheme.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source != null) {
+      _pickAndUploadCover(source);
+    }
+  }
+
+  Future<void> _pickAndUploadCover([ImageSource source = ImageSource.gallery]) async {
     try {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         imageQuality: 85,
         maxWidth: 1024,
         maxHeight: 1024,
@@ -111,12 +181,15 @@ class _AddGameSheetState extends State<AddGameSheet> {
           ),
         );
       } else {
+        final err = CloudinaryService().lastErrorMessage;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Cloudinary note: Upload preset not configured yet, using dynamic theme art instead.',
+              err != null && err.isNotEmpty
+                  ? 'Cloudinary: $err'
+                  : 'Cloudinary note: Upload preset not configured yet, using dynamic theme art instead.',
             ),
-            duration: Duration(seconds: 3),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -137,6 +210,7 @@ class _AddGameSheetState extends State<AddGameSheet> {
   }
 
   Future<void> _saveGame() async {
+    if (_isSaving || _isUploadingImage) return;
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -262,7 +336,7 @@ class _AddGameSheetState extends State<AddGameSheet> {
               _buildFieldLabel('GAME COVER PHOTO (CLOUDINARY)', t),
               const SizedBox(height: 8),
               BouncyTap(
-                onTap: _isUploadingImage ? null : _pickAndUploadCover,
+                onTap: _isUploadingImage ? null : _showImageSourcePicker,
                 scaleDown: 0.98,
                 child: Container(
                   height: 130,

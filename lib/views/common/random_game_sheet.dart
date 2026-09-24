@@ -279,9 +279,9 @@ class _RandomGameSheetState extends State<RandomGameSheet>
                           border: Border.all(color: t.cardBorder),
                         ),
                         clipBehavior: Clip.antiAlias,
-                        child: game.displayCoverUrl != null && game.displayCoverUrl!.isNotEmpty
+                        child: game.optimizedCoverUrl(width: 160, height: 160) != null
                             ? Image.network(
-                                game.displayCoverUrl!,
+                                game.optimizedCoverUrl(width: 160, height: 160)!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Center(
                                   child: Text(game.emoji, style: const TextStyle(fontSize: 32)),

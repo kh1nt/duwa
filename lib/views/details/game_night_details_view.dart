@@ -615,7 +615,7 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
   Widget _buildCozyHeroBanner(GameNightModel s, DuwaThemeData t) {
     final isVoting = s.status == GameNightStatus.voting;
     final displayTitle = s.selectedGame?.title ?? (isVoting ? 'Squad Vote in Progress' : s.title);
-    final coverUrl = s.selectedGame?.displayCoverUrl;
+    final coverUrl = s.selectedGame?.optimizedCoverUrl(width: 900, height: 500);
     final squadCount = s.goingCount;
 
     return Container(

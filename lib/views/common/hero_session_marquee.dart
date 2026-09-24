@@ -76,7 +76,7 @@ class _HeroSessionMarqueeState extends State<HeroSessionMarquee> {
     final isVoting = s.status == GameNightStatus.voting;
     final gameTitle = s.selectedGame?.title ?? (isVoting ? 'Squad Game Vote' : s.title);
     final gameEmoji = s.selectedGame?.emoji ?? (isVoting ? '🗳️' : '🎮');
-    final coverUrl = s.selectedGame?.displayCoverUrl;
+    final coverUrl = s.selectedGame?.optimizedCoverUrl(width: 800, height: 450);
     final current = _myRsvp;
     final locationName = s.location?.name;
 

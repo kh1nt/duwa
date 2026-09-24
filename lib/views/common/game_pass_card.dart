@@ -91,7 +91,7 @@ class GamePassCard extends StatelessWidget {
     }
     final (glowColor, baseBg) = _getGameAtmosphere();
     final isDark = !duwaTheme.isCleanLight;
-    final coverUrl = session.selectedGame?.displayCoverUrl;
+    final coverUrl = session.selectedGame?.optimizedCoverUrl(width: 800, height: 450);
     final urgency = _getUrgencyText();
 
     return BouncyTap(
@@ -375,7 +375,7 @@ class GamePassCard extends StatelessWidget {
 
   Widget _buildCozyCard(BuildContext context) {
     final t = duwaTheme;
-    final coverUrl = session.selectedGame?.displayCoverUrl;
+    final coverUrl = session.selectedGame?.optimizedCoverUrl(width: 800, height: 450);
     final timeStr = session.timeFormatted.isNotEmpty ? session.timeFormatted : 'Tonight';
     final dateStr = _getUrgencyText();
     final current = _myRsvp;

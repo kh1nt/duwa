@@ -133,3 +133,13 @@
   - **Eliminated Fake/Unreal Users**: Purged the hardcoded `suggestedGamers` dummy list; added real Firestore user lookup (`searchRegisteredUsers`); prompted organizers to share their squad code if no registered user exists instead of generating phantom accounts.
   - **Code & Join Discrepancies**: Unified `JoinCodeDialog` to accept both squad codes (`SQ-...`) and game night codes (`DUWA-...`, `DW-...`, or 4-char suffix) without mangling prefixes; fixed layout overflow in dispatch sheet.
   - **Testing**: Added `test/sso_squad_code_test.dart` (6 unit/widget tests); all 84 tests passing cleanly with 0 `flutter analyze` issues.
+- [x] **Cloudinary Media Pipeline, Profile Games Showcase & Custom Added Games Overhaul**:
+  - **Cloudinary Pipeline Architecture**: Built `CloudinaryConfig` with verified active cloud credentials (`dz4x2mmzc`, upload preset `duwa_preset`), `--dart-define` support, and base transformation URLs.
+  - **Dynamic In-App Cloudinary Setup & Live Test**: Built "Media Storage (Cloudinary)" bottom sheet in `ProfileView` under Connected Accounts allowing players to view active credentials, test uploads with 1-tap live verification, and customize credentials persisted via `PreferencesService`.
+  - **Profile Avatar Upgrades**: Enhanced avatar picker with Camera and Gallery image choices, active progress spinner on the avatar ring during upload, optimized Cloudinary CDN URL delivery (`f_auto,q_auto,w_128,h_128,c_fill`), and option to remove photo.
+  - **Squad Games & Favorites Showcase in Profile**: Added interactive "SQUAD LIBRARY & FAVORITES" section with filter tabs (`All Games`, `Added by You`, `Favorites`), 1-tap favorite toggle with haptic feedback, 1-tap "Plan" session trigger, and prominent "+ Add Game" action.
+  - **Custom Added Games Hardening & Local Cache**: Added local persistence for custom added games in `PreferencesService` (`duwa_custom_games`), attributed `createdBy` in `GameModel`, and hydrated custom games instantly on launch in `GameNightViewModel._initGamesCatalog` so games never disappear offline.
+  - **AddGameSheet Experience**: Added Camera & Gallery picker choices, upload progress overlay, submit disable guard during upload/saving, and friendly Cloudinary error reporting.
+  - **Optimized CDN Cover Art Across App**: Added `GameModel.optimizedCoverUrl()` and integrated it into `HeroSessionMarquee`, `GamePassCard`, `GameNightDetailsView`, `CreateGameNightSheet`, and `RandomGameSheet`.
+  - **Comprehensive Test Suite**: Added `test/cloudinary_profile_games_test.dart` (8 tests); full test suite (95 tests) passing cleanly with 0 `flutter analyze` issues.
+

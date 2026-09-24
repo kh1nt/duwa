@@ -1,27 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/duwa_theme.dart';
+import '../../models/game_model.dart';
 import '../../services/cloudinary_service.dart';
 import '../../services/firebase_service.dart';
+import '../../services/preferences_service.dart';
 import '../../viewmodels/game_night_viewmodel.dart';
 import '../../viewmodels/profile_viewmodel.dart';
 import '../../viewmodels/theme_viewmodel.dart';
+import '../common/add_game_sheet.dart';
 import '../common/bouncy_tap.dart';
+import '../../viewmodels/groups_viewmodel.dart';
+import '../create/create_game_night_sheet.dart';
 import 'steam_integration_view.dart';
 import 'theme_selector_view.dart';
 
-class ProfileView extends StatelessWidget {
+enum _GameTabFilter { all, addedByYou, favorites }
+
+class ProfileView extends StatefulWidget {
   final ProfileViewModel profileVm;
   final ThemeViewModel themeVm;
   final GameNightViewModel gameNightVm;
+  final GroupsViewModel? groupsVm;
+  final void Function(GameModel? initialGame)? onPlanWithGame;
 
   const ProfileView({
     super.key,
     required this.profileVm,
     required this.themeVm,
     required this.gameNightVm,
+    this.groupsVm,
+    this.onPlanWithGame,
   });
+
+  @override
+  State<ProfileView> createState() => _ProfileViewState();
+}
+
+class _ProfileViewState extends State<ProfileView> {
+  _GameTabFilter _activeFilter = _GameTabFilter.all;
 
   void _showEditProfileDialog(
     BuildContext context,
@@ -114,7 +133,7 @@ class ProfileView extends StatelessWidget {
                 onPressed: () {
                   final newName = nameController.text.trim();
                   if (newName.isNotEmpty) {
-                    profileVm.updateAvatar(
+                    widget.profileVm.updateAvatar(
                       displayName: newName,
                       handle:
                           '@${newName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_')}',
@@ -138,10 +157,10 @@ class ProfileView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([profileVm, themeVm]),
+      listenable: Listenable.merge([widget.profileVm, widget.themeVm, widget.gameNightVm]),
       builder: (_, __) {
-        final p = profileVm.profile;
-        final t = themeVm.themeData;
+        final p = widget.profileVm.profile;
+        final t = widget.themeVm.themeData;
         return Scaffold(
           appBar: AppBar(
             title: const Text('You'),
@@ -151,7 +170,7 @@ class ProfileView extends StatelessWidget {
                     () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ThemeSelectorView(themeVm: themeVm),
+                        builder: (_) => ThemeSelectorView(themeVm: widget.themeVm),
                       ),
                     ),
                 icon: Icon(Icons.tune_rounded, color: t.textSecondary),
@@ -167,10 +186,20 @@ class ProfileView extends StatelessWidget {
               const SizedBox(height: 10),
               _stats(p, t),
               const SizedBox(height: 26),
-              _label('CONNECTED ACCOUNTS', t),
+
+              // --- SQUAD GAMES & FAVORITES SHOWCASE ---
+              _gamesShowcase(context, p, t),
+              const SizedBox(height: 26),
+
+              _label('CONNECTED ACCOUNTS & STORAGE', t),
               const SizedBox(height: 10),
               _steam(context, p, t),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+              _cloudinaryStorage(context, t),
+              const SizedBox(height: 26),
+
+              _label('APP SETTINGS', t),
+              const SizedBox(height: 10),
               _setting(
                 context,
                 Icons.palette_outlined,
@@ -180,7 +209,7 @@ class ProfileView extends StatelessWidget {
                 () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ThemeSelectorView(themeVm: themeVm),
+                    builder: (_) => ThemeSelectorView(themeVm: widget.themeVm),
                   ),
                 ),
               ),
@@ -268,35 +297,43 @@ class ProfileView extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: t.primaryAccent, width: 2),
                     ),
-                    child:
-                        p.photoUrl != null && p.photoUrl!.isNotEmpty
-                            ? Image.network(
-                              CloudinaryService().getOptimizedUrl(
-                                p.photoUrl!,
-                                width: 128,
-                                height: 128,
-                              ),
-                              fit: BoxFit.cover,
-                              width: 64,
-                              height: 64,
-                              errorBuilder:
-                                  (_, __, ___) => Text(
-                                    p.avatarInitials,
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                      color: t.surfaceLowest,
-                                    ),
-                                  ),
-                            )
-                            : Text(
-                              p.avatarInitials,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                color: t.surfaceLowest,
-                              ),
+                    child: widget.profileVm.isUploadingAvatar
+                        ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(t.primaryAccent),
                             ),
+                          )
+                        : (p.photoUrl != null && p.photoUrl!.isNotEmpty
+                            ? Image.network(
+                                CloudinaryService().getOptimizedUrl(
+                                  p.photoUrl!,
+                                  width: 128,
+                                  height: 128,
+                                ),
+                                fit: BoxFit.cover,
+                                width: 64,
+                                height: 64,
+                                errorBuilder:
+                                    (_, __, ___) => Text(
+                                      p.avatarInitials,
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w900,
+                                        color: t.surfaceLowest,
+                                      ),
+                                    ),
+                              )
+                            : Text(
+                                p.avatarInitials,
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: t.surfaceLowest,
+                                ),
+                              )),
                   ),
                   Positioned(
                     right: -2,
@@ -372,7 +409,6 @@ class ProfileView extends StatelessWidget {
         ),
       );
 
-
   Widget _label(String value, DuwaThemeData t) => Text(
     value,
     style: TextStyle(
@@ -428,29 +464,444 @@ class ProfileView extends StatelessWidget {
   Widget _divider(DuwaThemeData t) =>
       Container(width: 1, height: 30, color: t.cardBorder);
 
+  // ==========================================
+  // --- SQUAD GAMES & FAVORITES SHOWCASE ---
+  // ==========================================
+
+  Widget _gamesShowcase(BuildContext context, dynamic p, DuwaThemeData t) {
+    final catalog = widget.gameNightVm.catalogGames;
+    final userUid = p.id as String;
+    final favoriteList = List<String>.from(p.favoriteGames ?? []);
+
+    final myAddedGames = catalog.where((g) {
+      if (g.createdBy != null && g.createdBy == userUid) return true;
+      if (g.imageUrl != null && g.imageUrl!.isNotEmpty) return true;
+      return false;
+    }).toList();
+
+    final favoritedGames = catalog.where((g) {
+      return favoriteList.contains(g.title);
+    }).toList();
+
+    List<GameModel> displayedGames;
+    switch (_activeFilter) {
+      case _GameTabFilter.all:
+        displayedGames = catalog;
+        break;
+      case _GameTabFilter.addedByYou:
+        displayedGames = myAddedGames;
+        break;
+      case _GameTabFilter.favorites:
+        displayedGames = favoritedGames;
+        break;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _label('SQUAD LIBRARY & FAVORITES', t),
+            BouncyTap(
+              onTap: () async {
+                final added = await AddGameSheet.show(
+                  context,
+                  gameNightVm: widget.gameNightVm,
+                  duwaTheme: t,
+                );
+                if (added != null) {
+                  setState(() => _activeFilter = _GameTabFilter.addedByYou);
+                }
+              },
+              scaleDown: 0.94,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: t.primaryAccent.withAlpha(25),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: t.primaryAccent.withAlpha(80)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, color: t.primaryAccent, size: 15),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Add Game',
+                      style: TextStyle(
+                        color: t.primaryAccent,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Filter Pills
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _filterChip(
+                label: 'All Games (${catalog.length})',
+                isSelected: _activeFilter == _GameTabFilter.all,
+                t: t,
+                onTap: () => setState(() => _activeFilter = _GameTabFilter.all),
+              ),
+              const SizedBox(width: 8),
+              _filterChip(
+                label: 'Added by You (${myAddedGames.length})',
+                isSelected: _activeFilter == _GameTabFilter.addedByYou,
+                t: t,
+                onTap: () => setState(() => _activeFilter = _GameTabFilter.addedByYou),
+              ),
+              const SizedBox(width: 8),
+              _filterChip(
+                label: 'Favorites (${favoritedGames.length})',
+                isSelected: _activeFilter == _GameTabFilter.favorites,
+                t: t,
+                onTap: () => setState(() => _activeFilter = _GameTabFilter.favorites),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Games List
+        if (displayedGames.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: t.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: t.cardBorder),
+            ),
+            child: Column(
+              children: [
+                Icon(LucideIcons.gamepad2, color: t.textMuted, size: 28),
+                const SizedBox(height: 8),
+                Text(
+                  _activeFilter == _GameTabFilter.addedByYou
+                      ? 'No custom games added yet.'
+                      : (_activeFilter == _GameTabFilter.favorites
+                          ? 'No favorites starred yet. Tap the heart on any game!'
+                          : 'No games found in catalog.'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: t.textSecondary, fontSize: 13),
+                ),
+                if (_activeFilter == _GameTabFilter.addedByYou) ...[
+                  const SizedBox(height: 12),
+                  BouncyTap(
+                    onTap: () => AddGameSheet.show(
+                      context,
+                      gameNightVm: widget.gameNightVm,
+                      duwaTheme: t,
+                    ),
+                    scaleDown: 0.95,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: t.primaryAccent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '+ Add Game with Cover Art',
+                        style: TextStyle(
+                          color: t.surfaceLowest,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: displayedGames.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final game = displayedGames[index];
+              final isFav = favoriteList.contains(game.title);
+              final isMine = (game.createdBy != null && game.createdBy == userUid) ||
+                  (game.imageUrl != null && game.imageUrl!.isNotEmpty);
+              final coverUrl = game.optimizedCoverUrl(width: 140, height: 100);
+
+              return Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: t.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: t.cardBorder),
+                ),
+                child: Row(
+                  children: [
+                    // Cover Thumbnail
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: coverUrl != null
+                          ? Image.network(
+                              coverUrl,
+                              width: 58,
+                              height: 48,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _coverFallback(game, t),
+                            )
+                          : _coverFallback(game, t),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Game Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  game.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: t.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              if (isMine)
+                                Container(
+                                  margin: const EdgeInsets.only(left: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: t.primaryAccent.withAlpha(30),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'Added',
+                                    style: TextStyle(
+                                      color: t.primaryAccent,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${game.playerCountRecommendation} · ${game.genre}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: t.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Actions: Favorite + Plan Session
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            size: 18,
+                            color: isFav ? Colors.redAccent : t.textMuted,
+                          ),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            widget.profileVm.toggleFavoriteGame(game.title);
+                          },
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(8),
+                          tooltip: isFav ? 'Remove from favorites' : 'Add to favorites',
+                        ),
+                        BouncyTap(
+                          onTap: () {
+                            if (widget.onPlanWithGame != null) {
+                              widget.onPlanWithGame!(game);
+                            } else {
+                              final effectiveGroups = widget.groupsVm ?? GroupsViewModel();
+                              CreateGameNightSheet.show(
+                                context,
+                                gameNightVm: widget.gameNightVm,
+                                groupsVm: effectiveGroups,
+                                duwaTheme: t,
+                                initialGame: game,
+                                onGameNightConfirmed: () {},
+                              );
+                            }
+                          },
+                          scaleDown: 0.92,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: t.surfaceLight,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: t.cardBorder),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.flash_on_rounded, color: t.primaryAccent, size: 13),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'Plan',
+                                  style: TextStyle(
+                                    color: t.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _coverFallback(GameModel game, DuwaThemeData t) {
+    return Container(
+      width: 58,
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [game.startColor, game.endColor],
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        game.emoji,
+        style: const TextStyle(fontSize: 20),
+      ),
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool isSelected,
+    required DuwaThemeData t,
+    required VoidCallback onTap,
+  }) {
+    return BouncyTap(
+      onTap: onTap,
+      scaleDown: 0.96,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? t.primaryAccent.withAlpha(35) : t.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? t.primaryAccent : t.cardBorder,
+            width: isSelected ? 1.4 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? t.primaryAccent : t.textSecondary,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // --- AVATAR PICKER SHEET ---
+  // ==========================================
+
+  Future<void> _handleAvatarUpload(BuildContext context, ImageSource source) async {
+    Navigator.pop(context);
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 512,
+      maxHeight: 512,
+    );
+
+    if (picked != null) {
+      widget.profileVm.setUploadingAvatar(true);
+      final bytes = await picked.readAsBytes();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Uploading avatar to Cloudinary... ☁️'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      final url = await CloudinaryService().uploadImageBytes(
+        bytes: bytes,
+        filename: picked.name.isNotEmpty ? picked.name : 'avatar.jpg',
+        folder: 'duwa/avatars',
+      );
+
+      widget.profileVm.setUploadingAvatar(false);
+      if (!context.mounted) return;
+
+      if (url != null) {
+        widget.profileVm.updatePhotoUrl(url);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Avatar updated successfully! ✨'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        final err = CloudinaryService().lastErrorMessage;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              err != null && err.isNotEmpty
+                  ? 'Cloudinary: $err'
+                  : 'Cloudinary upload note: check preset in CloudinaryService',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   void _showAvatarPickerSheet(
     BuildContext context,
     dynamic p,
     DuwaThemeData t,
   ) {
     final emojis = [
-      '🎮',
-      '🍕',
-      '🚀',
-      '⚡',
-      '👑',
-      '🎧',
-      '🔥',
-      '🦊',
-      '👾',
-      '🎲',
-      '🎯',
-      '🐱',
-      '🏆',
-      '💎',
-      '🛡️',
-      '🕹️',
+      '🎮', '🍕', '🚀', '⚡', '👑', '🎧', '🔥', '🦊',
+      '👾', '🎲', '🎯', '🐱', '🏆', '💎', '🛡️', '🕹️',
     ];
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -459,7 +910,9 @@ class ProfileView extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        final currentEmoji = profileVm.profile.avatarEmoji;
+        final currentEmoji = widget.profileVm.profile.avatarEmoji;
+        final hasCustomPhoto = p.photoUrl != null && (p.photoUrl as String).isNotEmpty;
+
         return Padding(
           padding: EdgeInsets.fromLTRB(
             20,
@@ -489,58 +942,42 @@ class ProfileView extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
                 const SizedBox(height: 16),
 
-                // 1. Cloudinary Photo Upload
+                // 1. Take Photo (Camera)
                 BouncyTap(
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    final picker = ImagePicker();
-                    final picked = await picker.pickImage(
-                      source: ImageSource.gallery,
-                      imageQuality: 85,
-                    );
-                    if (picked != null) {
-                      final bytes = await picked.readAsBytes();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Uploading avatar to Cloudinary... ☁️',
-                            ),
-                          ),
-                        );
-                      }
-                      final url = await CloudinaryService().uploadImageBytes(
-                        bytes: bytes,
-                        filename: picked.name,
-                        folder: 'duwa/avatars',
-                      );
-                      if (!context.mounted) return;
-                      if (url != null) {
-                        profileVm.updatePhotoUrl(url);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Avatar updated successfully! ✨'),
-                          ),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Cloudinary upload note: check preset in CloudinaryService',
-                            ),
-                          ),
-                        );
-                      }
-                    }
-                  },
+                  onTap: () => _handleAvatarUpload(context, ImageSource.camera),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 13,
-                      horizontal: 16,
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: t.surfaceLight,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: t.cardBorder),
                     ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(LucideIcons.camera, color: t.primaryAccent, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Take Photo (Camera)',
+                          style: TextStyle(
+                            color: t.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // 2. Cloudinary Photo Upload (Gallery)
+                BouncyTap(
+                  onTap: () => _handleAvatarUpload(context, ImageSource.gallery),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                     decoration: BoxDecoration(
                       color: t.primaryAccent.withAlpha(25),
                       borderRadius: BorderRadius.circular(14),
@@ -549,11 +986,7 @@ class ProfileView extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          LucideIcons.camera,
-                          color: t.primaryAccent,
-                          size: 18,
-                        ),
+                        Icon(LucideIcons.image, color: t.primaryAccent, size: 18),
                         const SizedBox(width: 8),
                         Text(
                           'Upload Photo (Cloudinary)',
@@ -569,17 +1002,48 @@ class ProfileView extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
 
-                // 2. Monogram gamer initials
+                // 3. Remove Photo if active
+                if (hasCustomPhoto) ...[
+                  BouncyTap(
+                    onTap: () {
+                      widget.profileVm.updatePhotoUrl('');
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withAlpha(20),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.redAccent.withAlpha(80)),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'Remove Photo',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                // 4. Monogram gamer initials
                 BouncyTap(
                   onTap: () {
-                    profileVm.updatePhotoUrl('');
+                    widget.profileVm.updatePhotoUrl('');
                     Navigator.pop(ctx);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 11,
-                      horizontal: 16,
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
                     decoration: BoxDecoration(
                       color: t.surfaceLight,
                       borderRadius: BorderRadius.circular(14),
@@ -629,7 +1093,7 @@ class ProfileView extends StatelessWidget {
                     return BouncyTap(
                       scaleDown: 0.92,
                       onTap: () {
-                        profileVm.updateAvatar(
+                        widget.profileVm.updateAvatar(
                           displayName: p.displayName,
                           handle: p.handle,
                           initials: p.avatarInitials,
@@ -641,10 +1105,9 @@ class ProfileView extends StatelessWidget {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
                         decoration: BoxDecoration(
-                          color:
-                              isSelected
-                                  ? t.primaryAccent.withAlpha(40)
-                                  : t.surfaceLight,
+                          color: isSelected
+                              ? t.primaryAccent.withAlpha(40)
+                              : t.surfaceLight,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isSelected ? t.primaryAccent : t.cardBorder,
@@ -669,6 +1132,330 @@ class ProfileView extends StatelessWidget {
     );
   }
 
+  // ==========================================
+  // --- CLOUDINARY MEDIA SETTINGS DRAWER ---
+  // ==========================================
+
+  Widget _cloudinaryStorage(BuildContext context, DuwaThemeData t) {
+    final activeCloud = CloudinaryService().cloudName;
+    return _setting(
+      context,
+      LucideIcons.cloud,
+      'Media Storage (Cloudinary)',
+      'Cloud: $activeCloud · Fast responsive CDN',
+      t,
+      () => _showCloudinarySettingsSheet(context, t),
+    );
+  }
+
+  void _showCloudinarySettingsSheet(BuildContext context, DuwaThemeData t) {
+    final cloudController = TextEditingController(text: CloudinaryService().cloudName);
+    final presetController = TextEditingController(text: CloudinaryService().uploadPreset);
+    bool isTesting = false;
+    String? testResult;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: t.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            16,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 28,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: t.cardBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: t.primaryAccent.withAlpha(30),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(LucideIcons.cloud, color: t.primaryAccent, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Cloudinary Storage',
+                          style: TextStyle(
+                            color: t.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, color: t.textMuted),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'DUWA uses Cloudinary unsigned uploads for avatars and custom game box art, with automatic WebP/AVIF compression.',
+                  style: TextStyle(color: t.textSecondary, fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+
+                // Status Badge
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: t.surfaceLight,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: t.cardBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF00F59B),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Pipeline Active (${CloudinaryService().cloudName})',
+                          style: TextStyle(
+                            color: t.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Credentials Inputs
+                Text(
+                  'CLOUD NAME',
+                  style: TextStyle(
+                    color: t.primaryAccent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: cloudController,
+                  style: TextStyle(color: t.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. dz4x2mmzc',
+                    filled: true,
+                    fillColor: t.surfaceHighest,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                Text(
+                  'UNSIGNED UPLOAD PRESET',
+                  style: TextStyle(
+                    color: t.primaryAccent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: presetController,
+                  style: TextStyle(color: t.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. duwa_preset',
+                    filled: true,
+                    fillColor: t.surfaceHighest,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                if (testResult != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: testResult!.contains('Success')
+                          ? const Color(0xFF00F59B).withAlpha(25)
+                          : Colors.redAccent.withAlpha(25),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: testResult!.contains('Success')
+                            ? const Color(0xFF00F59B)
+                            : Colors.redAccent,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          testResult!.contains('Success')
+                              ? Icons.check_circle_rounded
+                              : Icons.error_outline_rounded,
+                          color: testResult!.contains('Success')
+                              ? const Color(0xFF00F59B)
+                              : Colors.redAccent,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            testResult!,
+                            style: TextStyle(
+                              color: t.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Action Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: t.primaryAccent,
+                          side: BorderSide(color: t.primaryAccent),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: isTesting
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: t.primaryAccent,
+                                ),
+                              )
+                            : const Icon(Icons.speed_rounded, size: 16),
+                        label: Text(isTesting ? 'Testing...' : 'Test Upload'),
+                        onPressed: isTesting
+                            ? null
+                            : () async {
+                                setModalState(() {
+                                  isTesting = true;
+                                  testResult = null;
+                                });
+                                CloudinaryService().configure(
+                                  cloudName: cloudController.text.trim(),
+                                  uploadPreset: presetController.text.trim(),
+                                );
+                                final ok = await CloudinaryService().testConnection();
+                                setModalState(() {
+                                  isTesting = false;
+                                  if (ok) {
+                                    testResult = 'Success! Cloudinary is working perfectly. ☁️✨';
+                                  } else {
+                                    final err = CloudinaryService().lastErrorMessage;
+                                    testResult = err ?? 'Connection failed. Check cloud name and preset.';
+                                  }
+                                });
+                              },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: t.primaryAccent,
+                          foregroundColor: t.surfaceLowest,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          final cName = cloudController.text.trim();
+                          final pName = presetController.text.trim();
+                          CloudinaryService().configure(
+                            cloudName: cName,
+                            uploadPreset: pName,
+                          );
+                          PreferencesService().setCloudinaryCloudName(cName);
+                          PreferencesService().setCloudinaryUploadPreset(pName);
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Cloudinary settings saved! ✨'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          setState(() {});
+                        },
+                        child: const Text('Save Settings'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      CloudinaryService().resetToDefaults();
+                      cloudController.text = CloudinaryService().cloudName;
+                      presetController.text = CloudinaryService().uploadPreset;
+                      setModalState(() {
+                        testResult = 'Reset to default credentials.';
+                      });
+                      setState(() {});
+                    },
+                    child: Text(
+                      'Reset to App Defaults',
+                      style: TextStyle(color: t.textMuted, fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _steam(BuildContext context, dynamic p, DuwaThemeData t) => _setting(
     context,
     Icons.gamepad_rounded,
@@ -682,8 +1469,8 @@ class ProfileView extends StatelessWidget {
       MaterialPageRoute(
         builder:
             (_) => SteamIntegrationView(
-              profileVm: profileVm,
-              gameNightVm: gameNightVm,
+              profileVm: widget.profileVm,
+              gameNightVm: widget.gameNightVm,
               duwaTheme: t,
             ),
       ),

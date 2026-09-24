@@ -466,8 +466,16 @@ class ProfileViewModel extends ChangeNotifier {
     _persistProfile();
   }
 
+  bool _isUploadingAvatar = false;
+  bool get isUploadingAvatar => _isUploadingAvatar;
+
+  void setUploadingAvatar(bool uploading) {
+    _isUploadingAvatar = uploading;
+    notifyListeners();
+  }
+
   void _persistProfile() {
-    PreferencesService().setCachedUserProfile(_profile.toMap());
+    PreferencesService().setCachedUserProfile(_profile.toMap(), _profile.id);
     FirebaseService().saveUserProfile(
       uid: _profile.id,
       displayName: _profile.displayName,

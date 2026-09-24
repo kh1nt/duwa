@@ -821,7 +821,7 @@ class _CreateGameNightSheetState extends State<CreateGameNightSheet> {
         // Game Catalog Tiles
         ...catalog.map((game) {
           final isSelected = selectedGames.any((g) => g.id == game.id);
-          final coverUrl = game.displayCoverUrl;
+          final coverUrl = game.optimizedCoverUrl(width: 120, height: 90);
 
           return BouncyTap(
             onTap: () {

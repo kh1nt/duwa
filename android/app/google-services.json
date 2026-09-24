@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "334046732760-fcg1446gnb3t96nsh9049l3u550mup45.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.duwa",
+            "certificate_hash": "3249b843f5c1e676891bfeb372835169c5b12127"
+          }
+        },
+        {
           "client_id": "334046732760-m378ogsgeqa8j2202hgrpv4a3q5bv388.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,6 +37,13 @@
             {
               "client_id": "334046732760-m378ogsgeqa8j2202hgrpv4a3q5bv388.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "334046732760-m6tt1leg4p8gth2vc3ljdecf84g3koi7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.duwa"
+              }
             }
           ]
         }

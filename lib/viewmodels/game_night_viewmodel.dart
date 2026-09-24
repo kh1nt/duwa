@@ -6,6 +6,7 @@ import '../models/game_night_model.dart';
 import '../models/group_model.dart';
 import '../models/user_profile_model.dart';
 import '../services/firebase_service.dart';
+import '../services/preferences_service.dart';
 
 enum StateDemoMode { normal, empty, loading, error }
 
@@ -287,15 +288,32 @@ class GameNightViewModel extends ChangeNotifier {
   /// Safe to call from the constructor and after reset().
   void _initGamesCatalog() {
     try {
+      // 1. Hydrate from locally saved custom games immediately
+      final cachedCustomMaps = PreferencesService().getCachedCustomGames();
+      if (cachedCustomMaps.isNotEmpty) {
+        final cachedCustom = cachedCustomMaps
+            .map((m) => GameModel.fromMap(m, m['id'] as String? ?? 'game-${DateTime.now().millisecondsSinceEpoch}'))
+            .toList();
+        final cachedIds = cachedCustom.map((g) => g.id).toSet();
+        final remainingDefaults =
+            _defaultCatalog.where((g) => !cachedIds.contains(g.id)).toList();
+        _catalogGames = [...cachedCustom, ...remainingDefaults];
+      }
+
       FirebaseService().seedInitialGamesIfEmpty(_defaultCatalog);
       _gamesSubscription?.cancel();
       _gamesSubscription = FirebaseService().streamGames().listen(
         (cloudGames) {
           if (cloudGames.isNotEmpty) {
+            // Keep local custom games if not yet in cloud
             final cloudIds = cloudGames.map((g) => g.id).toSet();
+            final localCustom = _catalogGames
+                .where((g) => (g.imageUrl != null || g.createdBy != null) && !cloudIds.contains(g.id))
+                .toList();
+
             final remainingDefaults =
                 _defaultCatalog.where((g) => !cloudIds.contains(g.id)).toList();
-            _catalogGames = [...cloudGames, ...remainingDefaults];
+            _catalogGames = [...localCustom, ...cloudGames, ...remainingDefaults];
             notifyListeners();
           }
         },
@@ -305,6 +323,22 @@ class GameNightViewModel extends ChangeNotifier {
       );
     } catch (e) {
       debugPrint('Games catalog sync note (offline or test mode): $e');
+    }
+  }
+
+  void _persistCustomGameLocally(GameModel game) {
+    try {
+      final existing = PreferencesService().getCachedCustomGames();
+      final index = existing.indexWhere((m) => m['id'] == game.id || m['title'] == game.title);
+      final gameMap = game.toMap()..['id'] = game.id;
+      if (index != -1) {
+        existing[index] = gameMap;
+      } else {
+        existing.insert(0, gameMap);
+      }
+      PreferencesService().setCachedCustomGames(existing);
+    } catch (e) {
+      debugPrint('Error caching custom game: $e');
     }
   }
 
@@ -348,6 +382,7 @@ class GameNightViewModel extends ChangeNotifier {
     String? playerCount,
     String? imageUrl,
   }) async {
+    final currentUid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
     final (start, end) = _generateThemeGradients(genre, title);
     final newGame = GameModel(
       id: 'game-${DateTime.now().millisecondsSinceEpoch}',
@@ -361,16 +396,19 @@ class GameNightViewModel extends ChangeNotifier {
           playerCount?.trim().isNotEmpty == true
               ? playerCount!.trim()
               : '2-8 players',
+      createdBy: currentUid,
     );
 
     try {
       final saved = await FirebaseService().addGame(newGame);
       final finalGame = saved ?? newGame;
+      _persistCustomGameLocally(finalGame);
       _catalogGames.insert(0, finalGame);
       notifyListeners();
       return finalGame;
     } catch (e) {
       debugPrint('Error saving custom game to Firebase, keeping locally: $e');
+      _persistCustomGameLocally(newGame);
       _catalogGames.insert(0, newGame);
       notifyListeners();
       return newGame;

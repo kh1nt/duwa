@@ -16,6 +16,9 @@ class PreferencesService {
   static const String _keyDismissedNotifs = 'duwa_dismissed_notifications';
   static const String _keySteamApiKey = 'duwa_steam_api_key';
   static const String _keySteamInputId = 'duwa_steam_input_id';
+  static const String _keyCloudinaryCloudName = 'duwa_cloudinary_cloud_name';
+  static const String _keyCloudinaryUploadPreset = 'duwa_cloudinary_upload_preset';
+  static const String _keyCustomGames = 'duwa_custom_games';
 
   /// In-memory fallback map for unit test environments or before initialization
   final Map<String, dynamic> _fallbackMemory = {};
@@ -177,6 +180,94 @@ class PreferencesService {
       }
     } catch (e) {
       debugPrint('Error saving steam input id: $e');
+    }
+  }
+
+  // ==========================================
+  // --- CLOUDINARY MEDIA CONFIG ---
+  // ==========================================
+
+  /// Retrieve custom configured Cloudinary cloud name
+  String? getCloudinaryCloudName() {
+    if (_prefs != null) {
+      return _prefs!.getString(_keyCloudinaryCloudName);
+    }
+    return _fallbackMemory[_keyCloudinaryCloudName] as String?;
+  }
+
+  /// Save custom Cloudinary cloud name
+  Future<void> setCloudinaryCloudName(String? name) async {
+    if (name == null || name.trim().isEmpty) {
+      _fallbackMemory.remove(_keyCloudinaryCloudName);
+      if (_prefs != null) await _prefs!.remove(_keyCloudinaryCloudName);
+      return;
+    }
+    final trimmed = name.trim();
+    _fallbackMemory[_keyCloudinaryCloudName] = trimmed;
+    try {
+      if (_prefs != null) {
+        await _prefs!.setString(_keyCloudinaryCloudName, trimmed);
+      }
+    } catch (e) {
+      debugPrint('Error saving Cloudinary cloud name: $e');
+    }
+  }
+
+  /// Retrieve custom configured Cloudinary upload preset
+  String? getCloudinaryUploadPreset() {
+    if (_prefs != null) {
+      return _prefs!.getString(_keyCloudinaryUploadPreset);
+    }
+    return _fallbackMemory[_keyCloudinaryUploadPreset] as String?;
+  }
+
+  /// Save custom Cloudinary upload preset
+  Future<void> setCloudinaryUploadPreset(String? preset) async {
+    if (preset == null || preset.trim().isEmpty) {
+      _fallbackMemory.remove(_keyCloudinaryUploadPreset);
+      if (_prefs != null) await _prefs!.remove(_keyCloudinaryUploadPreset);
+      return;
+    }
+    final trimmed = preset.trim();
+    _fallbackMemory[_keyCloudinaryUploadPreset] = trimmed;
+    try {
+      if (_prefs != null) {
+        await _prefs!.setString(_keyCloudinaryUploadPreset, trimmed);
+      }
+    } catch (e) {
+      debugPrint('Error saving Cloudinary upload preset: $e');
+    }
+  }
+
+  // ==========================================
+  // --- LOCAL CUSTOM GAMES CACHE ---
+  // ==========================================
+
+  /// Retrieve list of cached custom added games for instant offline startup
+  List<Map<String, dynamic>> getCachedCustomGames() {
+    try {
+      final jsonStr = _prefs != null
+          ? _prefs!.getString(_keyCustomGames)
+          : _fallbackMemory[_keyCustomGames] as String?;
+      if (jsonStr == null || jsonStr.isEmpty) return [];
+      final list = jsonDecode(jsonStr) as List<dynamic>;
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (e) {
+      debugPrint('Error loading cached custom games: $e');
+      return [];
+    }
+  }
+
+  /// Persist custom games locally
+  Future<void> setCachedCustomGames(List<Map<String, dynamic>> games) async {
+    try {
+      final jsonStr = jsonEncode(games);
+      _fallbackMemory[_keyCustomGames] = jsonStr;
+      if (_prefs != null) {
+        await _prefs!.setString(_keyCustomGames, jsonStr);
+      }
+    } catch (e) {
+      debugPrint('Error caching custom games: $e');
     }
   }
 

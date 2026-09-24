@@ -449,6 +449,7 @@ void main() {
     expect(find.text('🚀'), findsWidgets);
 
     // Tap on rocket emoji
+    await tester.ensureVisible(find.text('🚀').first);
     await tester.tap(find.text('🚀').first);
     await tester.pumpAndSettle();
 
@@ -513,6 +514,7 @@ void main() {
     // Select second game for voting
     final dotaOption = find.text('Dota 2');
     expect(dotaOption, findsOneWidget);
+    await tester.ensureVisible(dotaOption);
     await tester.tap(dotaOption);
     await tester.pumpAndSettle();
 
