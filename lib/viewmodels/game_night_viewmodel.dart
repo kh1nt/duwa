@@ -6,6 +6,7 @@ import '../models/game_night_model.dart';
 import '../models/group_model.dart';
 import '../models/user_profile_model.dart';
 import '../services/firebase_service.dart';
+import '../services/notification_service.dart';
 import '../services/preferences_service.dart';
 
 enum StateDemoMode { normal, empty, loading, error }
@@ -1160,6 +1161,7 @@ class GameNightViewModel extends ChangeNotifier {
     _updateSession(gameNightId, (session) {
       return session.copyWith(status: GameNightStatus.cancelled);
     });
+    NotificationService().cancelSessionReminders(gameNightId);
     FirebaseService().updateGameNightStatus(
       gameNightId: gameNightId,
       status: 'cancelled',
@@ -1171,6 +1173,7 @@ class GameNightViewModel extends ChangeNotifier {
     _updateSession(gameNightId, (session) {
       return session.copyWith(status: GameNightStatus.completed);
     });
+    NotificationService().cancelSessionReminders(gameNightId);
     FirebaseService().updateGameNightStatus(
       gameNightId: gameNightId,
       status: 'completed',

@@ -6,6 +6,7 @@ import '../../core/theme/duwa_theme.dart';
 import '../../models/game_model.dart';
 import '../../services/cloudinary_service.dart';
 import '../../services/firebase_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/preferences_service.dart';
 import '../../viewmodels/game_night_viewmodel.dart';
 import '../../viewmodels/profile_viewmodel.dart';
@@ -212,6 +213,16 @@ class _ProfileViewState extends State<ProfileView> {
                     builder: (_) => ThemeSelectorView(themeVm: widget.themeVm),
                   ),
                 ),
+              ),
+
+              const SizedBox(height: 8),
+              _setting(
+                context,
+                Icons.notifications_active_outlined,
+                'Notification Reminders',
+                'Countdown alerts (2h, 15m), game voting ballots & push reminders',
+                t,
+                () => _showNotificationPreferencesSheet(context, t),
               ),
 
               const SizedBox(height: 8),
@@ -1541,4 +1552,412 @@ class _ProfileViewState extends State<ProfileView> {
       ),
     ),
   );
+
+  void _showNotificationPreferencesSheet(
+    BuildContext context,
+    DuwaThemeData t,
+  ) {
+    final prefs = PreferencesService();
+    bool pushEnabled = prefs.getPushNotificationsEnabled();
+    bool reminder2h = prefs.getReminder2HoursEnabled();
+    bool reminder15m = prefs.getReminder15MinsEnabled();
+    bool votingReminder = prefs.getVotingReminderEnabled();
+    bool isTesting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return Container(
+            margin: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: t.surface,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: t.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(120),
+                  blurRadius: 30,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Drag Handle
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: t.textMuted.withAlpha(70),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Header
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: t.heroCardGradient,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: t.primaryAccent.withAlpha(60),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.notifications_active_rounded,
+                            color: t.primaryAccent,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Notification Reminders',
+                                style: TextStyle(
+                                  color: t.textPrimary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Stay synced with game sessions & voting',
+                                style: TextStyle(
+                                  color: t.textSecondary,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Global Push Master Switch Card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: t.surfaceHighest,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: pushEnabled
+                              ? t.primaryAccent.withAlpha(50)
+                              : t.cardBorder,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Push Reminders',
+                                  style: TextStyle(
+                                    color: t.textPrimary,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'System notifications for upcoming game nights',
+                                  style: TextStyle(
+                                    color: t.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: pushEnabled,
+                            activeColor: t.primaryAccent,
+                            onChanged: (val) async {
+                              HapticFeedback.lightImpact();
+                              setModalState(() => pushEnabled = val);
+                              await prefs.setPushNotificationsEnabled(val);
+                              if (val) {
+                                await NotificationService().requestPermissions();
+                                await NotificationService().syncAllSessionReminders(
+                                  sessions: widget.gameNightVm.upcomingSessions,
+                                  currentUserId: widget.profileVm.profile.id,
+                                  currentUserName:
+                                      widget.profileVm.profile.displayName,
+                                );
+                              } else {
+                                await NotificationService().cancelAll();
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Granular Reminder Options (Animated Opacity when disabled)
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: pushEnabled ? 1.0 : 0.45,
+                      child: IgnorePointer(
+                        ignoring: !pushEnabled,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: t.surfaceHighest,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: t.cardBorder),
+                          ),
+                          child: Column(
+                            children: [
+                              // 2 Hours Before
+                              _notificationToggleTile(
+                                title: '2 Hours Before Session',
+                                subtitle:
+                                    'Warm up, grab snacks & verify game downloads',
+                                value: reminder2h,
+                                t: t,
+                                onChanged: (val) async {
+                                  HapticFeedback.lightImpact();
+                                  setModalState(() => reminder2h = val);
+                                  await prefs.setReminder2HoursEnabled(val);
+                                  await NotificationService().syncAllSessionReminders(
+                                    sessions:
+                                        widget.gameNightVm.upcomingSessions,
+                                    currentUserId: widget.profileVm.profile.id,
+                                    currentUserName:
+                                        widget.profileVm.profile.displayName,
+                                  );
+                                },
+                              ),
+                              Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: t.cardBorder.withAlpha(60),
+                              ),
+
+                              // 15 Minutes Before
+                              _notificationToggleTile(
+                                title: '15 Minutes Countdown',
+                                subtitle:
+                                    'Final alert to hop into Discord or voice channel',
+                                value: reminder15m,
+                                t: t,
+                                onChanged: (val) async {
+                                  HapticFeedback.lightImpact();
+                                  setModalState(() => reminder15m = val);
+                                  await prefs.setReminder15MinsEnabled(val);
+                                  await NotificationService().syncAllSessionReminders(
+                                    sessions:
+                                        widget.gameNightVm.upcomingSessions,
+                                    currentUserId: widget.profileVm.profile.id,
+                                    currentUserName:
+                                        widget.profileVm.profile.displayName,
+                                  );
+                                },
+                              ),
+                              Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: t.cardBorder.withAlpha(60),
+                              ),
+
+                              // Voting Ballots
+                              _notificationToggleTile(
+                                title: 'Game Voting Ballots',
+                                subtitle:
+                                    'Reminds you before game night vote closes',
+                                value: votingReminder,
+                                t: t,
+                                onChanged: (val) async {
+                                  HapticFeedback.lightImpact();
+                                  setModalState(() => votingReminder = val);
+                                  await prefs.setVotingReminderEnabled(val);
+                                  await NotificationService().syncAllSessionReminders(
+                                    sessions:
+                                        widget.gameNightVm.upcomingSessions,
+                                    currentUserId: widget.profileVm.profile.id,
+                                    currentUserName:
+                                        widget.profileVm.profile.displayName,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Test Push Notification Button
+                    BouncyTap(
+                      onTap: () async {
+                        if (isTesting) return;
+                        HapticFeedback.mediumImpact();
+                        setModalState(() => isTesting = true);
+
+                        await NotificationService().requestPermissions();
+                        final success =
+                            await NotificationService().showTestNotification();
+
+                        if (context.mounted) {
+                          setModalState(() => isTesting = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: t.surface,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: success
+                                      ? t.secondaryAccent
+                                      : Colors.redAccent,
+                                ),
+                              ),
+                              content: Row(
+                                children: [
+                                  Icon(
+                                    success
+                                        ? Icons.check_circle_rounded
+                                        : Icons.info_outline_rounded,
+                                    color: success
+                                        ? t.secondaryAccent
+                                        : Colors.redAccent,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      success
+                                          ? '⚡ Test notification dispatched! Check your tray.'
+                                          : 'Could not show test notification on this platform.',
+                                      style: TextStyle(
+                                        color: t.textPrimary,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: t.primaryAccent.withAlpha(25),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: t.primaryAccent.withAlpha(60),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (isTesting)
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    t.primaryAccent,
+                                  ),
+                                ),
+                              )
+                            else
+                              Icon(
+                                Icons.bolt_rounded,
+                                color: t.primaryAccent,
+                                size: 18,
+                              ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isTesting
+                                  ? 'Dispatching...'
+                                  : 'Send Test Push Notification',
+                              style: TextStyle(
+                                color: t.primaryAccent,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _notificationToggleTile({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required DuwaThemeData t,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: t.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: t.textSecondary,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            activeColor: t.primaryAccent,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
 }

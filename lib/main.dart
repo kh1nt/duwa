@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'services/firebase_service.dart';
+import 'services/notification_service.dart';
 import 'services/preferences_service.dart';
 import 'viewmodels/game_night_viewmodel.dart';
 import 'viewmodels/groups_viewmodel.dart';
@@ -18,6 +19,7 @@ import 'views/splash/duwa_splash_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await PreferencesService().init();
+  await NotificationService().init();
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -79,6 +81,7 @@ class _DuwaAppState extends State<DuwaApp> {
         _gameNightVm.reset();
         _groupsVm.reset();
         _profileVm.reset();
+        NotificationService().cancelAll();
       }
       _lastAuthUid = currentUid;
       if (user != null) {

@@ -19,6 +19,10 @@ class PreferencesService {
   static const String _keyCloudinaryCloudName = 'duwa_cloudinary_cloud_name';
   static const String _keyCloudinaryUploadPreset = 'duwa_cloudinary_upload_preset';
   static const String _keyCustomGames = 'duwa_custom_games';
+  static const String _keyPushNotificationsEnabled = 'duwa_push_notifications_enabled';
+  static const String _keyReminder2Hours = 'duwa_reminder_2_hours';
+  static const String _keyReminder15Mins = 'duwa_reminder_15_mins';
+  static const String _keyReminderVoting = 'duwa_reminder_voting';
 
   /// In-memory fallback map for unit test environments or before initialization
   final Map<String, dynamic> _fallbackMemory = {};
@@ -124,6 +128,90 @@ class PreferencesService {
       }
     } catch (e) {
       debugPrint('Error persisting read notification: $e');
+    }
+  }
+
+  // ==========================================
+  // --- NOTIFICATION PREFERENCES ---
+  // ==========================================
+
+  /// Check whether push / local reminders are globally enabled
+  bool getPushNotificationsEnabled() {
+    if (_prefs != null) {
+      return _prefs!.getBool(_keyPushNotificationsEnabled) ?? true;
+    }
+    return _fallbackMemory[_keyPushNotificationsEnabled] as bool? ?? true;
+  }
+
+  /// Update push / local notifications global toggle
+  Future<void> setPushNotificationsEnabled(bool enabled) async {
+    _fallbackMemory[_keyPushNotificationsEnabled] = enabled;
+    try {
+      if (_prefs != null) {
+        await _prefs!.setBool(_keyPushNotificationsEnabled, enabled);
+      }
+    } catch (e) {
+      debugPrint('Error saving push notifications toggle: $e');
+    }
+  }
+
+  /// Check whether 2-hour session reminder is enabled
+  bool getReminder2HoursEnabled() {
+    if (_prefs != null) {
+      return _prefs!.getBool(_keyReminder2Hours) ?? true;
+    }
+    return _fallbackMemory[_keyReminder2Hours] as bool? ?? true;
+  }
+
+  /// Update 2-hour session reminder toggle
+  Future<void> setReminder2HoursEnabled(bool enabled) async {
+    _fallbackMemory[_keyReminder2Hours] = enabled;
+    try {
+      if (_prefs != null) {
+        await _prefs!.setBool(_keyReminder2Hours, enabled);
+      }
+    } catch (e) {
+      debugPrint('Error saving 2-hour reminder toggle: $e');
+    }
+  }
+
+  /// Check whether 15-minute countdown reminder is enabled
+  bool getReminder15MinsEnabled() {
+    if (_prefs != null) {
+      return _prefs!.getBool(_keyReminder15Mins) ?? true;
+    }
+    return _fallbackMemory[_keyReminder15Mins] as bool? ?? true;
+  }
+
+  /// Update 15-minute countdown reminder toggle
+  Future<void> setReminder15MinsEnabled(bool enabled) async {
+    _fallbackMemory[_keyReminder15Mins] = enabled;
+    try {
+      if (_prefs != null) {
+        await _prefs!.setBool(_keyReminder15Mins, enabled);
+      }
+    } catch (e) {
+      debugPrint('Error saving 15-minute reminder toggle: $e');
+    }
+  }
+
+  /// Check whether game ballot / voting reminder is enabled
+  bool getVotingReminderEnabled() {
+    if (_prefs != null) {
+      return _prefs!.getBool(_keyReminderVoting) ?? true;
+    }
+    return _fallbackMemory[_keyReminderVoting] as bool? ?? true;
+  }
+
+  /// Update game ballot / voting reminder toggle
+  Future<void> setVotingReminderEnabled(bool enabled) async {
+    _fallbackMemory[_keyReminderVoting] = enabled;
+    try {
+      if (_prefs != null) {
+        await _prefs!.setBool(_keyReminderVoting, enabled);
+      }
+    } catch (e) {
+      debugPrint('Error saving voting reminder toggle: $e');
     }
   }
 

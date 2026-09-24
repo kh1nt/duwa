@@ -142,4 +142,15 @@
   - **AddGameSheet Experience**: Added Camera & Gallery picker choices, upload progress overlay, submit disable guard during upload/saving, and friendly Cloudinary error reporting.
   - **Optimized CDN Cover Art Across App**: Added `GameModel.optimizedCoverUrl()` and integrated it into `HeroSessionMarquee`, `GamePassCard`, `GameNightDetailsView`, `CreateGameNightSheet`, and `RandomGameSheet`.
   - **Comprehensive Test Suite**: Added `test/cloudinary_profile_games_test.dart` (8 tests); full test suite (95 tests) passing cleanly with 0 `flutter analyze` issues.
+- [x] **Scheduled Local Push Notifications & Countdown Reminders Engine**:
+  - **Dependencies & Manifest Hardening**: Added `flutter_local_notifications` and `timezone` dependencies; configured Android manifest permissions (`POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `VIBRATE`).
+  - **NotificationService Architecture**: Built `NotificationService` singleton with high-importance Android channel (`duwa_sessions`), iOS/macOS alert/sound/badge support, timezone initialization, and cross-platform fallback guards.
+  - **Multi-Tier Automated Countdown Reminders**:
+    - **2 Hours Before**: Alerts gamers with time to warm up, download updates, and grab snacks.
+    - **15 Minutes Countdown**: Urgent alert so gamers jump into voice channels and join the lobby promptly.
+    - **Game Voting Ballots**: Alerts squad members before voting locks down so democratic ballots get full squad participation.
+  - **Lifecycle & Attendance Sync**: Wired `syncAllSessionReminders()` into `MainShellView._onSessionsChanged()` and `initState()`; automatic cancellation on sign-out, session completion, or session cancellation.
+  - **Preferences Persistence**: Added `PreferencesService` methods for global push toggle, 2-hour reminder toggle, 15-minute countdown toggle, and voting ballot toggle.
+  - **Profile Settings Experience**: Built "Notification Reminders" modal sheet in `ProfileView` under `APP SETTINGS` featuring master push switch, granular reminder toggles, and a 1-tap "⚡ Send Test Push Notification" action with live snackbar confirmation.
+  - **Comprehensive Test Suite**: Added `test/scheduled_notifications_test.dart` (4 unit & widget tests); full test suite (99 tests) passing cleanly with 0 `flutter analyze` issues.
 

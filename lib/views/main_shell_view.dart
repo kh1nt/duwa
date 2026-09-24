@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/game_model.dart';
 import '../services/firebase_service.dart';
+import '../services/notification_service.dart';
 import '../viewmodels/game_night_viewmodel.dart';
 import '../viewmodels/groups_viewmodel.dart';
 import '../viewmodels/notifications_viewmodel.dart';
@@ -59,9 +60,12 @@ class _MainShellViewState extends State<MainShellView> {
     } catch (e) {
       debugPrint('MainShell init auth sync note: $e');
     }
-    // Initial sync of notifications
+    // Initial sync of notifications and notification permissions
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _onSessionsChanged();
+      if (mounted) {
+        NotificationService().requestPermissions();
+        _onSessionsChanged();
+      }
     });
   }
 
@@ -75,6 +79,11 @@ class _MainShellViewState extends State<MainShellView> {
   void _onSessionsChanged() {
     if (!mounted) return;
     widget.notificationsVm.syncWithSessions(
+      sessions: widget.gameNightVm.upcomingSessions,
+      currentUserId: widget.profileVm.profile.id,
+      currentUserName: widget.profileVm.profile.displayName,
+    );
+    NotificationService().syncAllSessionReminders(
       sessions: widget.gameNightVm.upcomingSessions,
       currentUserId: widget.profileVm.profile.id,
       currentUserName: widget.profileVm.profile.displayName,
