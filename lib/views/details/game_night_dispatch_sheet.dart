@@ -1075,7 +1075,7 @@ class _GameNightDispatchSheetState extends State<GameNightDispatchSheet> {
               style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'https://discord.com/api/webhooks/...',
-                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                hintStyle: DuwaTheme.blurryHintStyle(widget.duwaTheme, fontSize: 12),
                 filled: true,
                 fillColor: const Color(0xFF0D0F18),
                 border: OutlineInputBorder(

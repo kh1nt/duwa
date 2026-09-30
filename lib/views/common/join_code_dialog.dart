@@ -214,11 +214,10 @@ class _JoinCodeDialogState extends State<JoinCodeDialog> {
                 ],
                 decoration: InputDecoration(
                   hintText: 'DUWA-XXXX or SQ-XXXX',
-                  hintStyle: TextStyle(
-                    color: t.textMuted.withAlpha(120),
-                    letterSpacing: 2,
+                  hintStyle: DuwaTheme.blurryHintStyle(
+                    t,
                     fontSize: 16,
-                  ),
+                  ).copyWith(letterSpacing: 2),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),

@@ -13,6 +13,7 @@ class DuwaLogo extends StatefulWidget {
   final Color? textColor;
   final bool withGlow;
   final double? customSize;
+  final bool isEmblemOnly;
   final VoidCallback? onTap;
 
   const DuwaLogo({
@@ -22,6 +23,7 @@ class DuwaLogo extends StatefulWidget {
     this.textColor,
     this.withGlow = false,
     this.customSize,
+    this.isEmblemOnly = false,
     this.onTap,
   });
 
@@ -136,17 +138,26 @@ class _DuwaLogoState extends State<DuwaLogo> with SingleTickerProviderStateMixin
                       ),
                     ),
 
-                  // DUWA Gamepad Logo (assets/images/duwa_gamepad_logo.jpg)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(effectiveIconSize * 0.22),
-                    child: Image.asset(
-                      'assets/images/duwa_gamepad_logo.jpg',
+                  // DUWA Gamepad Logo (Clean single squircle tile with no outer background border)
+                  if (widget.isEmblemOnly)
+                    Image.asset(
+                      'assets/images/duwa_gamepad_logo.png',
                       width: effectiveIconSize,
                       height: effectiveIconSize,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
+                    )
+                  else
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(effectiveIconSize * 0.22),
+                      child: Image.asset(
+                        'assets/images/duwa_icon_tile_clean.png',
+                        width: effectiveIconSize,
+                        height: effectiveIconSize,
+                        fit: BoxFit.cover,
+                        filterQuality: FilterQuality.high,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

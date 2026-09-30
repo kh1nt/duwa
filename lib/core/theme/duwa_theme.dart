@@ -62,6 +62,10 @@ class DuwaThemeData {
   Color get tertiaryContainer => secondaryContainer;
   Color get onTertiaryContainer => textPrimary;
 
+  /// Clean, legible placeholder text style for text field hints.
+  TextStyle get blurryHintStyle => DuwaTheme.blurryHintStyle(this);
+  TextStyle get inputHintStyle => DuwaTheme.inputHintStyle(this);
+
   static DuwaThemeData cozyWellness() => cleanLight();
 
   static DuwaThemeData obsidianVoid() {
@@ -179,6 +183,39 @@ class DuwaTheme {
         ),
       ];
 
+  /// Generates a clean, user-friendly hint text style for input placeholders.
+  /// Uses a crisp, muted tone without smudged shadows to ensure high legibility
+  /// while keeping it clearly distinct from typed user text.
+  static TextStyle blurryHintStyle(
+    DuwaThemeData duwaTheme, {
+    double fontSize = 13,
+    FontStyle? fontStyle,
+    FontWeight? fontWeight,
+    double blurRadius = 0,
+  }) {
+    return TextStyle(
+      color: duwaTheme.textMuted.withAlpha(145),
+      fontSize: fontSize,
+      fontStyle: fontStyle,
+      fontWeight: fontWeight ?? FontWeight.w400,
+      letterSpacing: 0.1,
+    );
+  }
+
+  /// Clean, user-friendly hint text style alias
+  static TextStyle inputHintStyle(
+    DuwaThemeData duwaTheme, {
+    double fontSize = 13,
+    FontStyle? fontStyle,
+    FontWeight? fontWeight,
+  }) =>
+      blurryHintStyle(
+        duwaTheme,
+        fontSize: fontSize,
+        fontStyle: fontStyle,
+        fontWeight: fontWeight,
+      );
+
   static ThemeData buildMaterialTheme(DuwaThemeData duwaTheme) {
     final isLight = duwaTheme.isCleanLight || duwaTheme.isCozy;
     final colorScheme = ColorScheme(
@@ -274,6 +311,7 @@ class DuwaTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: duwaTheme.surfaceLight,
+        hintStyle: blurryHintStyle(duwaTheme, fontSize: 13),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: duwaTheme.cardBorder)),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: duwaTheme.cardBorder)),

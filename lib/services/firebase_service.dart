@@ -105,6 +105,16 @@ class FirebaseService {
     return credential;
   }
 
+  static const String _googleServerClientId =
+      '334046732760-m378ogsgeqa8j2202hgrpv4a3q5bv388.apps.googleusercontent.com';
+
+  GoogleSignIn _buildGoogleSignIn() {
+    return GoogleSignIn(
+      serverClientId: _googleServerClientId,
+      scopes: const ['email', 'profile'],
+    );
+  }
+
   /// Sign in with Google / Gmail (Native Account Chooser on mobile, OAuth popup on web, provider on desktop)
   Future<UserCredential?> signInWithGoogle() async {
     try {
@@ -152,11 +162,13 @@ class FirebaseService {
       }
 
       // Mobile (Android / iOS)
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        serverClientId:
-            '334046732760-m378ogsgeqa8j2202hgrpv4a3q5bv388.apps.googleusercontent.com',
-        scopes: ['email', 'profile'],
-      );
+      final GoogleSignIn googleSignIn = _buildGoogleSignIn();
+      // Explicitly sign out of any cached Google session before calling signIn,
+      // guaranteeing that the native Google Account Chooser dialog is always presented.
+      try {
+        await googleSignIn.signOut();
+      } catch (_) {}
+
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         // User dismissed the Google account chooser
@@ -189,11 +201,17 @@ class FirebaseService {
     }
   }
 
-  /// Sign out
+  /// Sign out from Firebase Auth, Google SSO, and clear local session state
   Future<void> signOut() async {
     try {
       await PreferencesService().clearUserSessionData();
     } catch (_) {}
+    try {
+      final googleSignIn = _buildGoogleSignIn();
+      await googleSignIn.signOut();
+    } catch (e) {
+      debugPrint('GoogleSignIn signOut note: $e');
+    }
     await _auth.signOut();
   }
 
@@ -561,6 +579,23 @@ class FirebaseService {
       });
     } catch (e) {
       debugPrint('Firestore castVote transaction note: $e');
+      return false;
+    }
+  }
+
+  /// Update nominated games for a session in Firestore
+  Future<bool> updateNominatedGames({
+    required String gameNightId,
+    required List<Map<String, dynamic>> nominatedGames,
+  }) async {
+    try {
+      await _gameNightsCol.doc(gameNightId).update({
+        'nominatedGames': nominatedGames,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }).timeout(const Duration(seconds: 4));
+      return true;
+    } catch (e) {
+      debugPrint('Firestore updateNominatedGames note: $e');
       return false;
     }
   }

@@ -144,7 +144,7 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
               style: TextStyle(color: theme.textPrimary, fontSize: 13.5),
               decoration: InputDecoration(
                 hintText: 'https://discord.gg/...',
-                hintStyle: TextStyle(color: theme.textMuted),
+                hintStyle: DuwaTheme.blurryHintStyle(theme, fontSize: 13.5),
                 filled: true,
                 fillColor: theme.surfaceHighest,
                 border: OutlineInputBorder(
@@ -217,7 +217,7 @@ class _GameNightDetailsViewState extends State<GameNightDetailsView> {
                 style: TextStyle(color: theme.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'e.g. 2 Large Bags of Doritos',
-                  hintStyle: TextStyle(color: theme.textMuted),
+                  hintStyle: DuwaTheme.blurryHintStyle(theme, fontSize: 14),
                   filled: true,
                   fillColor: theme.surfaceHighest,
                   border: OutlineInputBorder(

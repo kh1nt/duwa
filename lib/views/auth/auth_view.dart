@@ -469,7 +469,7 @@ class _AuthViewState extends State<AuthView> {
               filled: true,
               fillColor: t.surfaceHighest,
               hintText: 'Email Address',
-              hintStyle: TextStyle(color: t.textMuted),
+              hintStyle: t.blurryHintStyle,
               prefixIcon: Icon(
                 Icons.email_outlined,
                 color: t.primaryAccent,
@@ -496,7 +496,7 @@ class _AuthViewState extends State<AuthView> {
               filled: true,
               fillColor: t.surfaceHighest,
               hintText: 'Password',
-              hintStyle: TextStyle(color: t.textMuted),
+              hintStyle: t.blurryHintStyle,
               prefixIcon: Icon(
                 Icons.lock_outline,
                 color: t.primaryAccent,
@@ -642,7 +642,7 @@ class _AuthViewState extends State<AuthView> {
               filled: true,
               fillColor: t.surfaceHighest,
               hintText: 'Gamer Tag / Display Name',
-              hintStyle: TextStyle(color: t.textMuted),
+              hintStyle: t.blurryHintStyle,
               prefixIcon: Icon(
                 Icons.person_outline,
                 color: t.primaryAccent,
@@ -669,7 +669,7 @@ class _AuthViewState extends State<AuthView> {
               filled: true,
               fillColor: t.surfaceHighest,
               hintText: 'Email Address',
-              hintStyle: TextStyle(color: t.textMuted),
+              hintStyle: t.blurryHintStyle,
               prefixIcon: Icon(
                 Icons.email_outlined,
                 color: t.primaryAccent,
@@ -696,7 +696,7 @@ class _AuthViewState extends State<AuthView> {
               filled: true,
               fillColor: t.surfaceHighest,
               hintText: 'Password (min. 6 chars)',
-              hintStyle: TextStyle(color: t.textMuted),
+              hintStyle: t.blurryHintStyle,
               prefixIcon: Icon(
                 Icons.lock_outline,
                 color: t.primaryAccent,
@@ -736,7 +736,7 @@ class _AuthViewState extends State<AuthView> {
               filled: true,
               fillColor: t.surfaceHighest,
               hintText: 'Confirm Password',
-              hintStyle: TextStyle(color: t.textMuted),
+              hintStyle: t.blurryHintStyle,
               prefixIcon: Icon(
                 Icons.lock_reset_outlined,
                 color: t.primaryAccent,

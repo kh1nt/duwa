@@ -388,8 +388,8 @@ class _EditGameNightSheetState extends State<EditGameNightSheet> {
               ),
               decoration: InputDecoration(
                 hintText: hint,
-                hintStyle: TextStyle(
-                  color: t.textMuted.withAlpha(140),
+                hintStyle: DuwaTheme.blurryHintStyle(
+                  t,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),

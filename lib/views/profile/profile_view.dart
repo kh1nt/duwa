@@ -18,7 +18,7 @@ import '../create/create_game_night_sheet.dart';
 import 'steam_integration_view.dart';
 import 'theme_selector_view.dart';
 
-enum _GameTabFilter { all, addedByYou, favorites }
+enum _GameTabFilter { all, addedByYou, steam, favorites }
 
 class ProfileView extends StatefulWidget {
   final ProfileViewModel profileVm;
@@ -490,6 +490,10 @@ class _ProfileViewState extends State<ProfileView> {
       return false;
     }).toList();
 
+    final steamGames = catalog.where((g) {
+      return g.isSteamGame || (g.steamAppId != null && g.steamAppId! > 0);
+    }).toList();
+
     final favoritedGames = catalog.where((g) {
       return favoriteList.contains(g.title);
     }).toList();
@@ -501,6 +505,9 @@ class _ProfileViewState extends State<ProfileView> {
         break;
       case _GameTabFilter.addedByYou:
         displayedGames = myAddedGames;
+        break;
+      case _GameTabFilter.steam:
+        displayedGames = steamGames;
         break;
       case _GameTabFilter.favorites:
         displayedGames = favoritedGames;
@@ -572,6 +579,15 @@ class _ProfileViewState extends State<ProfileView> {
                 t: t,
                 onTap: () => setState(() => _activeFilter = _GameTabFilter.addedByYou),
               ),
+              if (steamGames.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                _filterChip(
+                  label: 'Steam (${steamGames.length})',
+                  isSelected: _activeFilter == _GameTabFilter.steam,
+                  t: t,
+                  onTap: () => setState(() => _activeFilter = _GameTabFilter.steam),
+                ),
+              ],
               const SizedBox(width: 8),
               _filterChip(
                 label: 'Favorites (${favoritedGames.length})',
@@ -601,9 +617,11 @@ class _ProfileViewState extends State<ProfileView> {
                 Text(
                   _activeFilter == _GameTabFilter.addedByYou
                       ? 'No custom games added yet.'
-                      : (_activeFilter == _GameTabFilter.favorites
-                          ? 'No favorites starred yet. Tap the heart on any game!'
-                          : 'No games found in catalog.'),
+                      : (_activeFilter == _GameTabFilter.steam
+                          ? 'No Steam games in catalog yet. Nominate or import from Steam above!'
+                          : (_activeFilter == _GameTabFilter.favorites
+                              ? 'No favorites starred yet. Tap the heart on any game!'
+                              : 'No games found in catalog.')),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: t.textSecondary, fontSize: 13),
                 ),
@@ -706,6 +724,24 @@ class _ProfileViewState extends State<ProfileView> {
                                       color: t.primaryAccent,
                                       fontSize: 9,
                                       fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              if (game.isSteamGame || (game.steamAppId != null && game.steamAppId! > 0))
+                                Container(
+                                  margin: const EdgeInsets.only(left: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blueGrey.withAlpha(45),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.blueGrey.withAlpha(90)),
+                                  ),
+                                  child: const Text(
+                                    'STEAM',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w900,
                                     ),
                                   ),
                                 ),
@@ -1482,6 +1518,8 @@ class _ProfileViewState extends State<ProfileView> {
             (_) => SteamIntegrationView(
               profileVm: widget.profileVm,
               gameNightVm: widget.gameNightVm,
+              groupsVm: widget.groupsVm,
+              onPlanWithGame: widget.onPlanWithGame,
               duwaTheme: t,
             ),
       ),

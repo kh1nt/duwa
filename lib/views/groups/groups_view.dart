@@ -745,7 +745,7 @@ class GroupsView extends StatelessWidget {
                             style: TextStyle(color: duwaTheme.textPrimary, fontSize: 14),
                             decoration: InputDecoration(
                               hintText: 'Enter gamer tag or name',
-                              hintStyle: TextStyle(color: duwaTheme.textMuted, fontSize: 13),
+                              hintStyle: DuwaTheme.blurryHintStyle(duwaTheme, fontSize: 13),
                               prefixIcon: Icon(Icons.alternate_email_rounded, color: duwaTheme.textMuted, size: 18),
                               filled: true,
                               fillColor: duwaTheme.surfaceLight,
@@ -1113,7 +1113,7 @@ class GroupsView extends StatelessWidget {
                   style: TextStyle(color: duwaTheme.textPrimary, fontWeight: FontWeight.w700),
                   decoration: InputDecoration(
                     hintText: 'SQ-XXXX',
-                    hintStyle: TextStyle(color: duwaTheme.textMuted),
+                    hintStyle: DuwaTheme.blurryHintStyle(duwaTheme, fontSize: 14),
                     filled: true,
                     fillColor: duwaTheme.surfaceLight,
                     border: OutlineInputBorder(

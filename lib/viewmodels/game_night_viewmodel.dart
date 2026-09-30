@@ -309,7 +309,7 @@ class GameNightViewModel extends ChangeNotifier {
             // Keep local custom games if not yet in cloud
             final cloudIds = cloudGames.map((g) => g.id).toSet();
             final localCustom = _catalogGames
-                .where((g) => (g.imageUrl != null || g.createdBy != null) && !cloudIds.contains(g.id))
+                .where((g) => (g.imageUrl != null || g.createdBy != null || g.isSteamGame) && !cloudIds.contains(g.id))
                 .toList();
 
             final remainingDefaults =
@@ -414,6 +414,104 @@ class GameNightViewModel extends ChangeNotifier {
       notifyListeners();
       return newGame;
     }
+  }
+
+  /// Returns true if the game exists in DUWA's games catalog (by ID, title, or Steam AppId)
+  bool isGameInCatalog(GameModel game) {
+    return _catalogGames.any(
+      (g) =>
+          g.id == game.id ||
+          g.title.trim().toLowerCase() == game.title.trim().toLowerCase() ||
+          (game.steamAppId != null &&
+              game.steamAppId! > 0 &&
+              g.steamAppId == game.steamAppId),
+    );
+  }
+
+  /// Returns true if a game is currently nominated in any active voting session
+  bool isGameNominatedInActiveSession(GameModel game) {
+    final votingIndex = _sessions.indexWhere(
+      (s) => s.status == GameNightStatus.voting,
+    );
+    if (votingIndex == -1) return false;
+    final session = _sessions[votingIndex];
+    return session.votingGames.any(
+      (g) =>
+          g.id == game.id ||
+          g.title.trim().toLowerCase() == game.title.trim().toLowerCase() ||
+          (game.steamAppId != null &&
+              game.steamAppId! > 0 &&
+              g.steamAppId == game.steamAppId),
+    );
+  }
+
+  /// Returns true if there is an active session currently in voting mode
+  bool get hasActiveVotingSession =>
+      _sessions.any((s) => s.status == GameNightStatus.voting);
+
+  /// Adds a game (e.g. from Steam library or external source) directly to the DUWA catalog
+  Future<GameModel> addGameToCatalog(GameModel game) async {
+    final existingIndex = _catalogGames.indexWhere(
+      (g) =>
+          g.id == game.id ||
+          g.title.trim().toLowerCase() == game.title.trim().toLowerCase() ||
+          (game.steamAppId != null &&
+              game.steamAppId! > 0 &&
+              g.steamAppId == game.steamAppId),
+    );
+    if (existingIndex != -1) {
+      return _catalogGames[existingIndex];
+    }
+
+    final currentUid =
+        _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
+    final (start, end) = (game.bannerGradientStart.isNotEmpty &&
+            game.bannerGradientEnd.isNotEmpty &&
+            game.bannerGradientStart != '#1E293B')
+        ? (game.bannerGradientStart, game.bannerGradientEnd)
+        : _generateThemeGradients(game.genre, game.title);
+
+    final coverArt = (game.imageUrl != null && game.imageUrl!.isNotEmpty)
+        ? game.imageUrl
+        : (game.steamAppId != null && game.steamAppId! > 0
+            ? 'https://cdn.cloudflare.steamstatic.com/steam/apps/${game.steamAppId}/header.jpg'
+            : null);
+
+    final gameToSave = game.copyWith(
+      createdBy: game.createdBy ?? currentUid,
+      bannerGradientStart: start,
+      bannerGradientEnd: end,
+      imageUrl: coverArt,
+      isSteamGame:
+          game.isSteamGame || (game.steamAppId != null && game.steamAppId! > 0),
+    );
+
+    try {
+      final saved = await FirebaseService().addGame(gameToSave);
+      final finalGame = saved ?? gameToSave;
+      _persistCustomGameLocally(finalGame);
+      _catalogGames.insert(0, finalGame);
+      notifyListeners();
+      return finalGame;
+    } catch (e) {
+      debugPrint('Error saving game to Firebase, keeping locally: $e');
+      _persistCustomGameLocally(gameToSave);
+      _catalogGames.insert(0, gameToSave);
+      notifyListeners();
+      return gameToSave;
+    }
+  }
+
+  /// Batch imports multiple games into the DUWA catalog
+  Future<int> addMultipleGamesToCatalog(List<GameModel> games) async {
+    int count = 0;
+    for (final game in games) {
+      if (!isGameInCatalog(game)) {
+        await addGameToCatalog(game);
+        count++;
+      }
+    }
+    return count;
   }
 
   (String, String) _generateThemeGradients(String genre, String title) {
@@ -1180,8 +1278,12 @@ class GameNightViewModel extends ChangeNotifier {
     );
   }
 
-  /// Nominates a game (e.g., from Steam library) into the active voting session
-  bool nominateGameForVoting(GameModel game) {
+  /// Nominates a game (e.g., from Steam library) into the active voting session,
+  /// ensuring it is also added to the DUWA games catalog.
+  Future<bool> nominateGameForVoting(GameModel game) async {
+    // 1. Ensure game is added to the catalog so squad can see and play it
+    await addGameToCatalog(game);
+
     final votingIndex = _sessions.indexWhere(
       (s) => s.status == GameNightStatus.voting,
     );
@@ -1191,7 +1293,11 @@ class GameNightViewModel extends ChangeNotifier {
     final session = _sessions[votingIndex];
     final exists = session.votingGames.any(
       (g) =>
-          g.title.toLowerCase() == game.title.toLowerCase() || g.id == game.id,
+          g.title.toLowerCase() == game.title.toLowerCase() ||
+          g.id == game.id ||
+          (game.steamAppId != null &&
+              game.steamAppId! > 0 &&
+              g.steamAppId == game.steamAppId),
     );
     if (exists) {
       return false;
@@ -1206,6 +1312,17 @@ class GameNightViewModel extends ChangeNotifier {
       userVotedGameId: nominated.id,
     );
     notifyListeners();
+
+    try {
+      final nominatedMaps = updated.map((g) => g.toMap()).toList();
+      await FirebaseService().updateNominatedGames(
+        gameNightId: session.id,
+        nominatedGames: nominatedMaps,
+      );
+    } catch (e) {
+      debugPrint('Firestore updateNominatedGames note: $e');
+    }
+
     return true;
   }
 
