@@ -108,6 +108,25 @@ class GameNightViewModel extends ChangeNotifier {
     });
   }
 
+  bool _isCurrentUserAttending(GameNightModel session) {
+    final uid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
+    final name = _currentUserProfile?.displayName.trim().toLowerCase() ??
+        FirebaseService().currentUser?.displayName?.trim().toLowerCase();
+
+    if ((uid != null && uid != 'user-default' && session.createdBy == uid) ||
+        (name != null && session.organizerName?.trim().toLowerCase() == name)) {
+      return true;
+    }
+
+    return session.players.any((p) {
+      final pName = p.name.replaceAll('(You)', '').trim().toLowerCase();
+      final isSelf = (uid != null && uid != 'user-default' && p.id == uid) ||
+          p.id == 'p1' ||
+          (name != null && pName == name);
+      return isSelf && p.rsvp == RSVPStatus.going;
+    });
+  }
+
   void _rebuildSessionsFromDocs() {
     if (_lastCloudDocs.isEmpty) return;
 
@@ -133,6 +152,14 @@ class GameNightViewModel extends ChangeNotifier {
         .toList();
 
     _sessions = [...filteredCloud, ...pendingLocals];
+
+    final uid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid ?? '';
+    final name = _currentUserProfile?.displayName ?? FirebaseService().currentUser?.displayName;
+    NotificationService().syncAllSessionReminders(
+      sessions: _sessions,
+      currentUserId: uid,
+      currentUserName: name,
+    );
   }
 
   void syncCurrentUser(UserProfileModel profile) {
@@ -1466,6 +1493,13 @@ class GameNightViewModel extends ChangeNotifier {
       );
     });
 
+    final updated = getSessionById(gameNightId);
+    final isAttending = _isCurrentUserAttending(updated);
+    NotificationService().scheduleSessionReminders(
+      session: updated,
+      isUserAttending: isAttending,
+    );
+
     FirebaseService().updateSessionDetails(
       gameNightId: gameNightId,
       title: title?.trim(),
@@ -1524,6 +1558,13 @@ class GameNightViewModel extends ChangeNotifier {
       }
       return session.copyWith(players: updatedPlayers);
     });
+
+    final updated = getSessionById(gameNightId);
+    final isGoing = status == RSVPStatus.going;
+    NotificationService().scheduleSessionReminders(
+      session: updated,
+      isUserAttending: isGoing,
+    );
 
     FirebaseService().updatePlayerRsvp(
       gameNightId: gameNightId,
@@ -1804,6 +1845,7 @@ class GameNightViewModel extends ChangeNotifier {
   }
 
   void confirmGameNight() {
+    if (_currentCreationStep == 3) return; // Guard against double-tap submission
     final isVoting = _draftSelectedGames.length > 1;
     // Compute real formatted date from _draftDate instead of hardcoding
     final months = [
@@ -1901,6 +1943,11 @@ class GameNightViewModel extends ChangeNotifier {
     _currentCreationStep = 3; // step 3 = success screen
     notifyListeners();
 
+    NotificationService().scheduleSessionReminders(
+      session: newSession,
+      isUserAttending: true,
+    );
+
     // Asynchronously sync with Firebase Cloud Firestore
     FirebaseService().createGameNight(
       id: sessionId,
@@ -1988,6 +2035,10 @@ class GameNightViewModel extends ChangeNotifier {
       _sessions.insert(0, session);
     }
     notifyListeners();
+    NotificationService().scheduleSessionReminders(
+      session: session,
+      isUserAttending: true,
+    );
     return session;
   }
 
@@ -1995,7 +2046,12 @@ class GameNightViewModel extends ChangeNotifier {
     _deletedSessionIds.add(sessionId);
     _sessions.removeWhere((s) => s.id == sessionId);
     notifyListeners();
-    await FirebaseService().deleteGameNight(sessionId);
+    NotificationService().cancelSessionReminders(sessionId);
+    try {
+      await FirebaseService().deleteGameNight(sessionId);
+    } catch (e) {
+      debugPrint('Error deleting game night from firestore: $e');
+    }
   }
 
   @override

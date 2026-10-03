@@ -325,41 +325,54 @@ class ProfileViewModel extends ChangeNotifier {
     _steamSyncError = null;
     notifyListeners();
 
-    final key = customApiKey?.trim().isNotEmpty == true
-        ? customApiKey!.trim()
-        : (PreferencesService().getSteamApiKey() ?? SteamConfig.steamApiKey);
+    try {
+      final key = customApiKey?.trim().isNotEmpty == true
+          ? customApiKey!.trim()
+          : (PreferencesService().getSteamApiKey() ?? SteamConfig.steamApiKey);
 
-    final result = await SteamService().syncSteamAccount(
-      input: input,
-      apiKey: key,
-    );
+      final result = await SteamService().syncSteamAccount(
+        input: input,
+        apiKey: key,
+      );
 
-    _isSyncing = false;
-    if (!result.isSuccess) {
-      _steamSyncError = result.errorMessage;
+      _isSyncing = false;
+      if (!result.isSuccess) {
+        _steamSyncError = result.errorMessage;
+        notifyListeners();
+        return result;
+      }
+
+      final steamProf = result.profile!;
+      _realSteamGames = result.games;
+      _profile = _profile.copyWith(
+        isSteamConnected: true,
+        steamPersonaName: steamProf.personaName,
+        steamGamesCount: result.games.length,
+        steamFriendCode: input.trim(),
+        steamStatus: steamProf.statusText,
+        lastSteamSync: 'Just now',
+      );
+
+      PreferencesService().setSteamInputId(input.trim());
+      if (customApiKey != null && customApiKey.trim().isNotEmpty) {
+        PreferencesService().setSteamApiKey(customApiKey.trim());
+      }
+
       notifyListeners();
+      _persistProfile();
       return result;
+    } catch (e) {
+      debugPrint('Error in connectSteamAccount: $e');
+      _isSyncing = false;
+      _steamSyncError = 'Connection failed: Please check your network and API key.';
+      notifyListeners();
+      return SteamSyncResult.failure(_steamSyncError!);
+    } finally {
+      if (_isSyncing) {
+        _isSyncing = false;
+        notifyListeners();
+      }
     }
-
-    final steamProf = result.profile!;
-    _realSteamGames = result.games;
-    _profile = _profile.copyWith(
-      isSteamConnected: true,
-      steamPersonaName: steamProf.personaName,
-      steamGamesCount: result.games.length,
-      steamFriendCode: input.trim(),
-      steamStatus: steamProf.statusText,
-      lastSteamSync: 'Just now',
-    );
-
-    PreferencesService().setSteamInputId(input.trim());
-    if (customApiKey != null && customApiKey.trim().isNotEmpty) {
-      PreferencesService().setSteamApiKey(customApiKey.trim());
-    }
-
-    notifyListeners();
-    _persistProfile();
-    return result;
   }
 
   /// Disconnect Steam integration and purge synced library

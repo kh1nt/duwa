@@ -374,7 +374,7 @@ class FirebaseService {
         'organizerName': organizerName ?? (currentUser?.displayName ?? 'Host'),
         'createdBy': creatorUid ?? 'guest',
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      }).timeout(const Duration(seconds: 8));
       return docRef.id;
     } catch (e) {
       debugPrint('Error creating game night on Firebase: $e');
@@ -383,7 +383,7 @@ class FirebaseService {
   }
 
   /// Update the lifecycle status of a session (e.g. voting -> planning -> ready -> completed -> cancelled)
-  Future<void> updateGameNightStatus({
+  Future<bool> updateGameNightStatus({
     required String gameNightId,
     required String status,
     Map<String, dynamic>? selectedGame,
@@ -396,14 +396,19 @@ class FirebaseService {
       if (selectedGame != null) {
         updateData['selectedGame'] = selectedGame;
       }
-      await _gameNightsCol.doc(gameNightId).update(updateData);
+      await _gameNightsCol
+          .doc(gameNightId)
+          .update(updateData)
+          .timeout(const Duration(seconds: 8));
+      return true;
     } catch (e) {
       debugPrint('Error updating game night status: $e');
+      return false;
     }
   }
 
   /// Update checklist items in Cloud Firestore
-  Future<void> updateGameNightChecklist({
+  Future<bool> updateGameNightChecklist({
     required String gameNightId,
     required List<Map<String, dynamic>> checklist,
   }) async {
@@ -411,9 +416,11 @@ class FirebaseService {
       await _gameNightsCol.doc(gameNightId).update({
         'checklist': checklist,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }).timeout(const Duration(seconds: 8));
+      return true;
     } catch (e) {
       debugPrint('Error updating checklist in Firestore: $e');
+      return false;
     }
   }
 
@@ -442,7 +449,10 @@ class FirebaseService {
       if (locationName != null) {
         updates['location'] = {'name': locationName, 'isConfirmed': true};
       }
-      await _gameNightsCol.doc(gameNightId).update(updates);
+      await _gameNightsCol
+          .doc(gameNightId)
+          .update(updates)
+          .timeout(const Duration(seconds: 8));
       return true;
     } catch (e) {
       debugPrint('Error updating session details on Firebase: $e');
@@ -459,7 +469,7 @@ class FirebaseService {
       await _gameNightsCol.doc(gameNightId).update({
         'checklist': FieldValue.arrayUnion([item]),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }).timeout(const Duration(seconds: 8));
       return true;
     } catch (e) {
       debugPrint('Error adding checklist item to Firebase: $e');
@@ -470,7 +480,10 @@ class FirebaseService {
   /// Delete a game night session from Firestore
   Future<bool> deleteGameNight(String gameNightId) async {
     try {
-      await _gameNightsCol.doc(gameNightId).delete();
+      await _gameNightsCol
+          .doc(gameNightId)
+          .delete()
+          .timeout(const Duration(seconds: 8));
       return true;
     } catch (e) {
       debugPrint('Error deleting game night on Firebase: $e');
@@ -495,11 +508,15 @@ class FirebaseService {
       final query = await _gameNightsCol
           .where('roomCode', whereIn: [formatted, duwaVariant, dwVariant, withoutPrefix])
           .limit(1)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 8));
 
       if (query.docs.isEmpty) {
         // Check by document ID as fallback
-        final directDoc = await _gameNightsCol.doc(roomCode.trim().toLowerCase()).get();
+        final directDoc = await _gameNightsCol
+            .doc(roomCode.trim().toLowerCase())
+            .get()
+            .timeout(const Duration(seconds: 8));
         if (!directDoc.exists) return null;
         return {'id': directDoc.id, ...directDoc.data()!};
       }
@@ -529,7 +546,7 @@ class FirebaseService {
       }
       if (updates.isNotEmpty) {
         updates['updatedAt'] = FieldValue.serverTimestamp();
-        await doc.reference.update(updates);
+        await doc.reference.update(updates).timeout(const Duration(seconds: 8));
       }
       return {'id': doc.id, ...data, 'players': players};
     } catch (e) {
@@ -545,9 +562,14 @@ class FirebaseService {
     if (targetUid == null || targetUid == 'user-default' || targetUid.isEmpty) {
       return const Stream.empty();
     }
-    return _gameNightsCol
-        .where('playerUids', arrayContains: targetUid)
-        .snapshots();
+    try {
+      return _gameNightsCol
+          .where('playerUids', arrayContains: targetUid)
+          .snapshots();
+    } catch (e) {
+      debugPrint('Error streaming game nights: $e');
+      return const Stream.empty();
+    }
   }
 
   /// Cast a vote in real-time using atomic Firestore transaction
@@ -576,7 +598,7 @@ class FirebaseService {
           return true;
         }
         return false;
-      });
+      }).timeout(const Duration(seconds: 8));
     } catch (e) {
       debugPrint('Firestore castVote transaction note: $e');
       return false;
@@ -637,7 +659,7 @@ class FirebaseService {
           'updatedAt': FieldValue.serverTimestamp(),
         });
         return true;
-      });
+      }).timeout(const Duration(seconds: 8));
     } catch (e) {
       debugPrint('Firestore updatePlayerRsvp transaction note: $e');
       return false;
@@ -655,9 +677,14 @@ class FirebaseService {
     if (targetUid == null || targetUid == 'user-default' || targetUid.isEmpty) {
       return const Stream.empty();
     }
-    return _groupsCol
-        .where('memberUids', arrayContains: targetUid)
-        .snapshots();
+    try {
+      return _groupsCol
+          .where('memberUids', arrayContains: targetUid)
+          .snapshots();
+    } catch (e) {
+      debugPrint('Error streaming groups: $e');
+      return const Stream.empty();
+    }
   }
 
   /// Generate a unique Firestore document ID for a squad
@@ -713,7 +740,7 @@ class FirebaseService {
         'squadCode': code,
         'createdBy': creatorUid ?? 'guest',
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      }).timeout(const Duration(seconds: 8));
       return docRef.id;
     } catch (e) {
       debugPrint('Error creating squad: $e');
@@ -740,18 +767,25 @@ class FirebaseService {
           await _groupsCol
               .where('squadCode', whereIn: [upperFormatted, withPrefix, withoutPrefix])
               .limit(1)
-              .get();
+              .get()
+              .timeout(const Duration(seconds: 8));
 
       DocumentSnapshot<Map<String, dynamic>>? targetDoc;
       if (query.docs.isNotEmpty) {
         targetDoc = query.docs.first;
       } else {
         // Try direct document id
-        final directDoc = await _groupsCol.doc(formatted.toLowerCase()).get();
+        final directDoc = await _groupsCol
+            .doc(formatted.toLowerCase())
+            .get()
+            .timeout(const Duration(seconds: 8));
         if (directDoc.exists) {
           targetDoc = directDoc;
         } else {
-          final directUpper = await _groupsCol.doc(upperFormatted).get();
+          final directUpper = await _groupsCol
+              .doc(upperFormatted)
+              .get()
+              .timeout(const Duration(seconds: 8));
           if (directUpper.exists) {
             targetDoc = directUpper;
           }
@@ -779,7 +813,7 @@ class FirebaseService {
 
       if (updates.isNotEmpty) {
         updates['updatedAt'] = FieldValue.serverTimestamp();
-        await targetDoc.reference.update(updates);
+        await targetDoc.reference.update(updates).timeout(const Duration(seconds: 8));
       }
 
       return {'id': targetDoc.id, ...data, 'memberNames': members};
@@ -792,7 +826,10 @@ class FirebaseService {
   /// Delete a squad from Firestore
   Future<bool> deleteSquad(String squadId) async {
     try {
-      await _groupsCol.doc(squadId).delete();
+      await _groupsCol
+          .doc(squadId)
+          .delete()
+          .timeout(const Duration(seconds: 8));
       return true;
     } catch (e) {
       debugPrint('Error deleting squad from Firebase: $e');
@@ -809,7 +846,7 @@ class FirebaseService {
       await _groupsCol.doc(squadId).update({
         'memberNames': memberNames,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }).timeout(const Duration(seconds: 8));
       return true;
     } catch (e) {
       debugPrint('Error updating squad members on Firebase: $e');

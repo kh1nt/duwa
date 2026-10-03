@@ -99,6 +99,7 @@ class NotificationService {
 
   /// Request runtime notification permissions on Android 13+ and iOS
   Future<bool> requestPermissions() async {
+    if (!_initialized) return false;
     try {
       if (kIsWeb) return false;
 
@@ -137,6 +138,7 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
+    if (!_initialized) return false;
     try {
       await _notificationsPlugin.show(
         0,
@@ -154,6 +156,7 @@ class NotificationService {
 
   /// Trigger instant test notification verifying configuration
   Future<bool> showTestNotification() async {
+    if (!_initialized) return false;
     return showInstantNotification(
       title: '🎮 Squad Game Night Test',
       body: 'Push reminders are active! You will be alerted before sessions start.',
@@ -166,6 +169,7 @@ class NotificationService {
     required GameNightModel session,
     required bool isUserAttending,
   }) async {
+    if (!_initialized) return;
     final prefs = PreferencesService();
 
     // If notifications are disabled globally or user is not attending, cancel reminders
@@ -239,6 +243,7 @@ class NotificationService {
 
   /// Cancels all scheduled reminder notifications for a specific session ID
   Future<void> cancelSessionReminders(String sessionId) async {
+    if (!_initialized) return;
     try {
       await _notificationsPlugin.cancel(notificationId(sessionId, 120));
       await _notificationsPlugin.cancel(notificationId(sessionId, 15));
@@ -250,6 +255,7 @@ class NotificationService {
 
   /// Cancel a single notification by numeric ID
   Future<void> cancelNotification(int id) async {
+    if (!_initialized) return;
     try {
       await _notificationsPlugin.cancel(id);
     } catch (e) {
@@ -259,6 +265,7 @@ class NotificationService {
 
   /// Cancel all scheduled notifications across the app
   Future<void> cancelAll() async {
+    if (!_initialized) return;
     try {
       await _notificationsPlugin.cancelAll();
     } catch (e) {
@@ -272,6 +279,7 @@ class NotificationService {
     required String currentUserId,
     String? currentUserName,
   }) async {
+    if (!_initialized) return;
     final prefs = PreferencesService();
     if (!prefs.getPushNotificationsEnabled()) {
       await cancelAll();
@@ -327,6 +335,7 @@ class NotificationService {
     required DateTime scheduledDate,
     String? payload,
   }) async {
+    if (!_initialized) return;
     try {
       final tzLocation = tz.local;
       final tzDateTime = tz.TZDateTime.from(scheduledDate, tzLocation);

@@ -1,6 +1,6 @@
 # DUWA
 
-DUWA a game-session planner.
+Game Session Planner
 
-Made by: Khint Steven Guiritan
-
+**Khint Steven Guiritan**  
+Built with passion for gamers who just want to play.

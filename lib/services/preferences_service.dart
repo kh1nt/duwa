@@ -23,6 +23,7 @@ class PreferencesService {
   static const String _keyReminder2Hours = 'duwa_reminder_2_hours';
   static const String _keyReminder15Mins = 'duwa_reminder_15_mins';
   static const String _keyReminderVoting = 'duwa_reminder_voting';
+  static const String _keyDiscordWebhookUrl = 'duwa_discord_webhook_url';
 
   /// In-memory fallback map for unit test environments or before initialization
   final Map<String, dynamic> _fallbackMemory = {};
@@ -356,6 +357,37 @@ class PreferencesService {
       }
     } catch (e) {
       debugPrint('Error caching custom games: $e');
+    }
+  }
+
+  /// Get cached Discord webhook URL
+  String? getDiscordWebhookUrl() {
+    if (_prefs != null) {
+      return _prefs!.getString(_keyDiscordWebhookUrl);
+    }
+    return _fallbackMemory[_keyDiscordWebhookUrl] as String?;
+  }
+
+  /// Persist Discord webhook URL
+  Future<void> setDiscordWebhookUrl(String? url) async {
+    if (url != null && url.trim().isNotEmpty) {
+      _fallbackMemory[_keyDiscordWebhookUrl] = url.trim();
+      try {
+        if (_prefs != null) {
+          await _prefs!.setString(_keyDiscordWebhookUrl, url.trim());
+        }
+      } catch (e) {
+        debugPrint('Error saving discord webhook URL: $e');
+      }
+    } else {
+      _fallbackMemory.remove(_keyDiscordWebhookUrl);
+      try {
+        if (_prefs != null) {
+          await _prefs!.remove(_keyDiscordWebhookUrl);
+        }
+      } catch (e) {
+        debugPrint('Error removing discord webhook URL: $e');
+      }
     }
   }
 

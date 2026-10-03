@@ -146,6 +146,23 @@ class _DuwaLogoState extends State<DuwaLogo> with SingleTickerProviderStateMixin
                       height: effectiveIconSize,
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: effectiveIconSize,
+                        height: effectiveIconSize,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(effectiveIconSize * 0.22),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF5E1E), Color(0xFFFFA114)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.sports_esports_rounded,
+                          size: effectiveIconSize * 0.55,
+                          color: Colors.white,
+                        ),
+                      ),
                     )
                   else
                     ClipRRect(
@@ -156,6 +173,23 @@ class _DuwaLogoState extends State<DuwaLogo> with SingleTickerProviderStateMixin
                         height: effectiveIconSize,
                         fit: BoxFit.cover,
                         filterQuality: FilterQuality.high,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: effectiveIconSize,
+                          height: effectiveIconSize,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(effectiveIconSize * 0.22),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF5E1E), Color(0xFFFFA114)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.sports_esports_rounded,
+                            size: effectiveIconSize * 0.55,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                 ],

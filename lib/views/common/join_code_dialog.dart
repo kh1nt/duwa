@@ -64,52 +64,63 @@ class _JoinCodeDialogState extends State<JoinCodeDialog> {
     final playerName = FirebaseService().currentUser?.displayName ?? 'Gamer';
     final currentUid = FirebaseService().currentUser?.uid;
 
-    if (isSquad) {
-      final squadResult = await FirebaseService().joinSquadByCode(
-        code: upper,
-        playerName: playerName,
-        uid: currentUid,
-      );
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      if (squadResult != null) {
-        Navigator.pop(context);
-        widget.onJoined({'type': 'squad', ...squadResult});
-        return;
-      }
-    }
-
-    // Try session join with original code (supports DUWA-XXXX, DW-XXXX, or raw 4-char suffix)
-    final result = await FirebaseService().joinGameNightByCode(
-      roomCode: upper,
-      playerName: playerName,
-      uid: currentUid,
-    );
-
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    if (result != null) {
-      Navigator.pop(context);
-      widget.onJoined(result);
-    } else {
-      // If not marked with SQ- prefix, also try squad join as fallback
-      if (!isSquad) {
-        final squadFallback = await FirebaseService().joinSquadByCode(
+    try {
+      if (isSquad) {
+        final squadResult = await FirebaseService().joinSquadByCode(
           code: upper,
           playerName: playerName,
           uid: currentUid,
         );
-        if (squadFallback != null) {
-          if (!mounted) return;
+        if (!mounted) return;
+        if (squadResult != null) {
           Navigator.pop(context);
-          widget.onJoined({'type': 'squad', ...squadFallback});
+          widget.onJoined({'type': 'squad', ...squadResult});
           return;
         }
       }
-      setState(() {
-        _errorMessage = 'Lobby or squad not found! Check code with your host 🎮';
-      });
+
+      // Try session join with original code (supports DUWA-XXXX, DW-XXXX, or raw 4-char suffix)
+      final result = await FirebaseService().joinGameNightByCode(
+        roomCode: upper,
+        playerName: playerName,
+        uid: currentUid,
+      );
+
+      if (!mounted) return;
+
+      if (result != null) {
+        Navigator.pop(context);
+        widget.onJoined(result);
+      } else {
+        // If not marked with SQ- prefix, also try squad join as fallback
+        if (!isSquad) {
+          final squadFallback = await FirebaseService().joinSquadByCode(
+            code: upper,
+            playerName: playerName,
+            uid: currentUid,
+          );
+          if (squadFallback != null) {
+            if (!mounted) return;
+            Navigator.pop(context);
+            widget.onJoined({'type': 'squad', ...squadFallback});
+            return;
+          }
+        }
+        setState(() {
+          _errorMessage = 'Lobby or squad not found! Check code with your host 🎮';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error joining with code: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Connection timed out or failed. Please check your network.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

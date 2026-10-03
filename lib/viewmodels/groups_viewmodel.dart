@@ -224,6 +224,14 @@ class GroupsViewModel extends ChangeNotifier {
           );
 
     final currentUid = _currentUserProfile?.id ?? FirebaseService().currentUser?.uid;
+
+    // Guard against rapid duplicate additions of the same squad
+    if (_groups.isNotEmpty &&
+        _groups.first.name.trim().toLowerCase() == name.trim().toLowerCase() &&
+        _groups.first.createdBy == currentUid) {
+      return;
+    }
+
     final squadId = FirebaseService().newSquadId();
     final squadCode = FirebaseService().generateSquadCode();
     final newGroup = GamerGroupModel(

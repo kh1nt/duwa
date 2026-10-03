@@ -671,6 +671,60 @@ class GroupsView extends StatelessWidget {
             final inviteLink = 'https://duwa.app/squad/${squad.displaySquadCode}';
             final crewNames = squad.members.map((m) => m.name.replaceAll(' (You)', '')).join(', ');
 
+            bool isAdding = false;
+
+            Future<void> handleAddMember(String raw) async {
+              final query = raw.trim();
+              if (query.isEmpty || isAdding) return;
+              setSheetState(() => isAdding = true);
+              try {
+                final realUsers = await FirebaseService().searchRegisteredUsers(query);
+                if (realUsers.isNotEmpty) {
+                  final user = realUsers.first;
+                  final realName = user['displayName'] as String? ?? query;
+                  final added = await groupsVm.addMemberToSquad(
+                    squadId: squad.id,
+                    memberName: realName,
+                    userId: user['uid'] as String?,
+                    username: user['handle'] as String?,
+                    avatarEmoji: user['avatarEmoji'] as String?,
+                  );
+                  if (added) {
+                    controller.clear();
+                    setSheetState(() {});
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Added $realName to ${squad.name}! 🎮')),
+                      );
+                    }
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$realName is already in ${squad.name}')),
+                      );
+                    }
+                  }
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('No registered player found with "$query". Share code $inviteCode to invite them!'),
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                debugPrint('Error adding member to squad: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Could not add squad member. Check connection.')),
+                  );
+                }
+              } finally {
+                setSheetState(() => isAdding = false);
+              }
+            }
+
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -742,6 +796,7 @@ class GroupsView extends StatelessWidget {
                         Expanded(
                           child: TextField(
                             controller: controller,
+                            enabled: !isAdding,
                             style: TextStyle(color: duwaTheme.textPrimary, fontSize: 14),
                             decoration: InputDecoration(
                               hintText: 'Enter gamer tag or name',
@@ -763,102 +818,32 @@ class GroupsView extends StatelessWidget {
                                 borderSide: BorderSide(color: duwaTheme.primaryAccent, width: 1.5),
                               ),
                             ),
-                            onSubmitted: (val) async {
-                              final query = val.trim();
-                              if (query.isEmpty) return;
-                              final realUsers = await FirebaseService().searchRegisteredUsers(query);
-                              if (realUsers.isNotEmpty) {
-                                final user = realUsers.first;
-                                final realName = user['displayName'] as String? ?? query;
-                                final added = await groupsVm.addMemberToSquad(
-                                  squadId: squad.id,
-                                  memberName: realName,
-                                  userId: user['uid'] as String?,
-                                  username: user['handle'] as String?,
-                                  avatarEmoji: user['avatarEmoji'] as String?,
-                                );
-                                if (added) {
-                                  controller.clear();
-                                  setSheetState(() {});
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Added $realName to ${squad.name}! 🎮')),
-                                    );
-                                  }
-                                } else {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('$realName is already in ${squad.name}')),
-                                    );
-                                  }
-                                }
-                              } else {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('No registered player found with "$query". Share your code $inviteCode to invite them!'),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
+                            onSubmitted: (val) => handleAddMember(val),
                           ),
                         ),
                         const SizedBox(width: 8),
                         BouncyTap(
-                          onTap: () async {
-                            final query = controller.text.trim();
-                            if (query.isEmpty) return;
-                            final realUsers = await FirebaseService().searchRegisteredUsers(query);
-                            if (realUsers.isNotEmpty) {
-                              final user = realUsers.first;
-                              final realName = user['displayName'] as String? ?? query;
-                              final added = await groupsVm.addMemberToSquad(
-                                squadId: squad.id,
-                                memberName: realName,
-                                userId: user['uid'] as String?,
-                                username: user['handle'] as String?,
-                                avatarEmoji: user['avatarEmoji'] as String?,
-                              );
-                              if (added) {
-                                controller.clear();
-                                setSheetState(() {});
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Added $realName to ${squad.name}! 🎮')),
-                                  );
-                                }
-                              } else {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('$realName is already in ${squad.name}')),
-                                  );
-                                }
-                              }
-                            } else {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('No registered player found with "$query". Share code $inviteCode to invite them!'),
-                                  ),
-                                );
-                              }
-                            }
-                          },
+                          onTap: isAdding ? null : () => handleAddMember(controller.text),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                             decoration: BoxDecoration(
                               color: duwaTheme.primaryAccent,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Text(
-                              'Add',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
+                            child: isAdding
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Text(
+                                    'Add',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
                           ),
                         ),
                       ],
@@ -1064,15 +1049,26 @@ class GroupsView extends StatelessWidget {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(dlgCtx);
               if (bottomSheetContext != null && Navigator.canPop(bottomSheetContext)) {
                 Navigator.pop(bottomSheetContext);
               }
-              groupsVm.deleteSquad(g.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Squad "${g.name}" deleted.')),
-              );
+              try {
+                await groupsVm.deleteSquad(g.id);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Squad "${g.name}" deleted.')),
+                  );
+                }
+              } catch (e) {
+                debugPrint('Error deleting squad: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Could not delete squad. Check connection.')),
+                  );
+                }
+              }
             },
             child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
@@ -1150,20 +1146,30 @@ class GroupsView extends StatelessWidget {
                           errorMessage = null;
                         });
 
-                        final squad = await groupsVm.joinSquadByCode(code);
-                        if (!dialogCtx.mounted) return;
+                        try {
+                          final squad = await groupsVm.joinSquadByCode(code);
+                          if (!dialogCtx.mounted) return;
 
-                        if (squad != null) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Joined ${squad.name}! 🎮')),
-                          );
-                          _showSquadDetail(context, squad);
-                        } else {
-                          setDialogState(() {
-                            isLoading = false;
-                            errorMessage = 'Squad not found! Check code with your crew.';
-                          });
+                          if (squad != null) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Joined ${squad.name}! 🎮')),
+                            );
+                            _showSquadDetail(context, squad);
+                          } else {
+                            setDialogState(() {
+                              isLoading = false;
+                              errorMessage = 'Squad not found! Check code with your crew.';
+                            });
+                          }
+                        } catch (e) {
+                          debugPrint('Error joining squad by code: $e');
+                          if (dialogCtx.mounted) {
+                            setDialogState(() {
+                              isLoading = false;
+                              errorMessage = 'Failed to connect. Check your network.';
+                            });
+                          }
                         }
                       },
                 child: isLoading
@@ -1185,6 +1191,8 @@ class GroupsView extends StatelessWidget {
     final name = TextEditingController();
     final tagline = TextEditingController();
     String emoji = '🎮';
+    String? nameError;
+    bool isSubmitting = false;
 
     showModalBottomSheet(
       context: context,
@@ -1193,57 +1201,76 @@ class GroupsView extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Create a squad',
-              style: TextStyle(
-                color: duwaTheme.textPrimary,
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
+      builder: (ctx) => StatefulBuilder(
+        builder: (bottomCtx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Create a squad',
+                style: TextStyle(
+                  color: duwaTheme.textPrimary,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const SizedBox(height: 15),
-            TextField(
-              controller: name,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Squad name'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: tagline,
-              decoration: const InputDecoration(labelText: 'What do you play together?'),
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: emoji,
-              decoration: const InputDecoration(labelText: 'Icon'),
-              items: const ['🎮', '🎲', '🍕', '🔥', '🚀', '👾', '🏆']
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                  .toList(),
-              onChanged: (v) => emoji = v ?? emoji,
-            ),
-            const SizedBox(height: 18),
-            DuwaButton(
-              label: 'Create squad',
-              isFullWidth: true,
-              onPressed: () {
-                if (name.text.trim().isEmpty) return;
-                groupsVm.addGroup(
-                  name: name.text.trim(),
-                  tagline: tagline.text.trim().isEmpty
-                      ? 'Gaming sessions with friends'
-                      : tagline.text.trim(),
-                  emoji: emoji,
-                );
-                Navigator.pop(ctx);
-              },
-            ),
-          ],
+              const SizedBox(height: 15),
+              TextField(
+                controller: name,
+                autofocus: true,
+                onChanged: (_) {
+                  if (nameError != null) {
+                    setModalState(() => nameError = null);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Squad name',
+                  errorText: nameError,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: tagline,
+                decoration: const InputDecoration(labelText: 'What do you play together?'),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: emoji,
+                decoration: const InputDecoration(labelText: 'Icon'),
+                items: const ['🎮', '🎲', '🍕', '🔥', '🚀', '👾', '🏆']
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
+                onChanged: (v) => emoji = v ?? emoji,
+              ),
+              const SizedBox(height: 18),
+              DuwaButton(
+                label: 'Create squad',
+                isFullWidth: true,
+                isLoading: isSubmitting,
+                onPressed: isSubmitting
+                    ? null
+                    : () {
+                        if (isSubmitting) return;
+                        final trimmedName = name.text.trim();
+                        if (trimmedName.isEmpty) {
+                          setModalState(() => nameError = 'Please provide a squad name');
+                          return;
+                        }
+                        setModalState(() => isSubmitting = true);
+                        groupsVm.addGroup(
+                          name: trimmedName,
+                          tagline: tagline.text.trim().isEmpty
+                              ? 'Gaming sessions with friends'
+                              : tagline.text.trim(),
+                          emoji: emoji,
+                        );
+                        Navigator.pop(ctx);
+                      },
+              ),
+            ],
+          ),
         ),
       ),
     );

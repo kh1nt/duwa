@@ -5,6 +5,7 @@ import '../../core/theme/duwa_theme.dart';
 import '../../models/game_night_model.dart';
 import '../../services/calendar_service.dart';
 import '../../services/discord_service.dart';
+import '../../services/preferences_service.dart';
 import '../common/bouncy_tap.dart';
 import 'calendar_export_sheet.dart';
 
@@ -1038,107 +1039,155 @@ class _GameNightDispatchSheetState extends State<GameNightDispatchSheet> {
   }
 
   Future<void> _promptAndBroadcastDiscord(BuildContext context, GameNightModel s) async {
-    final controller = TextEditingController();
-    final url = await showDialog<String>(
+    final cachedUrl = PreferencesService().getDiscordWebhookUrl() ?? '';
+    final controller = TextEditingController(text: cachedUrl);
+    String? validationError;
+    bool isBroadcasting = false;
+
+    await showDialog<void>(
       context: context,
-      builder: (dlgCtx) => AlertDialog(
-        backgroundColor: const Color(0xFF161926),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF2C324B)),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.send_rounded, color: Color(0xFF5865F2), size: 20),
-            SizedBox(width: 8),
-            Text(
-              'Discord Webhook',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 17,
+      barrierDismissible: false,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF161926),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Color(0xFF2C324B)),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.send_rounded, color: Color(0xFF5865F2), size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Discord Webhook',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
               ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Paste your squad channel Webhook URL to broadcast a rich embed directly into Discord:',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                enabled: !isBroadcasting,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                onChanged: (_) {
+                  if (validationError != null) {
+                    setDialogState(() => validationError = null);
+                  }
+                },
+                decoration: InputDecoration(
+                  hintText: 'https://discord.com/api/webhooks/...',
+                  hintStyle: DuwaTheme.blurryHintStyle(widget.duwaTheme, fontSize: 12),
+                  filled: true,
+                  fillColor: const Color(0xFF0D0F18),
+                  errorText: validationError,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF2C324B)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF2C324B)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF5865F2), width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isBroadcasting ? null : () => Navigator.pop(dlgCtx),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF5865F2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: isBroadcasting
+                  ? null
+                  : () async {
+                      final url = controller.text.trim();
+                      if (url.isEmpty) {
+                        setDialogState(() => validationError = 'Please paste a webhook URL');
+                        return;
+                      }
+                      if (!DiscordService().isValidWebhookUrl(url)) {
+                        setDialogState(() => validationError = 'URL must start with https://discord.com/api/webhooks/');
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isBroadcasting = true;
+                        validationError = null;
+                      });
+
+                      bool success = false;
+                      try {
+                        success = await DiscordService().sendSessionAnnouncement(
+                          webhookUrl: url,
+                          session: s,
+                        );
+                      } catch (e) {
+                        debugPrint('Discord dispatch error: $e');
+                        success = false;
+                      }
+
+                      if (!ctx.mounted) return;
+
+                      if (success) {
+                        await PreferencesService().setDiscordWebhookUrl(url);
+                        if (dlgCtx.mounted) {
+                          Navigator.pop(dlgCtx);
+                        }
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Row(
+                                children: [
+                                  Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                  SizedBox(width: 8),
+                                  Expanded(child: Text('Session broadcast to Discord channel! 🚀')),
+                                ],
+                              ),
+                              backgroundColor: DuwaColors.ionMint,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      } else {
+                        setDialogState(() {
+                          isBroadcasting = false;
+                          validationError = 'Dispatch failed. Check webhook permissions or URL.';
+                        });
+                      }
+                    },
+              child: isBroadcasting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Send Alert', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Paste your squad channel Webhook URL to broadcast a rich embed directly into Discord:',
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'https://discord.com/api/webhooks/...',
-                hintStyle: DuwaTheme.blurryHintStyle(widget.duwaTheme, fontSize: 12),
-                filled: true,
-                fillColor: const Color(0xFF0D0F18),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2C324B)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF2C324B)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF5865F2), width: 1.5),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dlgCtx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF5865F2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(dlgCtx, controller.text.trim()),
-            child: const Text('Send Alert', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
       ),
     );
-
-    if (url != null && url.isNotEmpty) {
-      final success = await DiscordService().sendSessionAnnouncement(webhookUrl: url, session: s);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  success ? Icons.check_circle_rounded : Icons.error_outline_rounded,
-                  color: Colors.white,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    success
-                        ? 'Session broadcast to Discord channel! 🚀'
-                        : 'Discord dispatch failed. Check Webhook URL.',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: success ? DuwaColors.ionMint : DuwaColors.errorRed,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
   }
 }

@@ -1304,6 +1304,7 @@ class _CreateGameNightSheetState extends State<CreateGameNightSheet> {
             child: BouncyTap(
               onTap: () {
                 if (isLast) {
+                  if (widget.gameNightVm.currentCreationStep == 3) return;
                   widget.gameNightVm.confirmGameNight();
                 } else {
                   if (step == 0 && !widget.gameNightVm.isDraftScheduleInFuture) {
